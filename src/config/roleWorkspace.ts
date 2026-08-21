@@ -2,11 +2,21 @@ import { AppModule, UserRole } from '../types';
 
 export type RoleShellMode = 'admin' | 'analytics' | 'compact' | 'standalone';
 export type QuickActionType = 'new_ticket' | 'new_customer' | 'new_task' | 'new_procurement' | null;
+export type NavigationCategoryId = 'dashboards' | 'operasional' | 'koordinasi' | 'infrastruktur' | 'administrasi';
+
+export interface NavigationCategoryMeta {
+  id: NavigationCategoryId;
+  label: string;
+  searchLabel: string;
+  order: number;
+}
 
 export interface ModuleMeta {
   id: AppModule;
   label: string;
   description: string;
+  navigationCategory: NavigationCategoryId;
+  navigationOrder: number;
   searchPlaceholder?: string;
   quickAction: QuickActionType;
   viewFormats: Array<'table' | 'grid' | 'kanban' | 'map'>;
@@ -26,11 +36,46 @@ export interface RoleWorkspaceConfig {
   showSidebarNavigation: boolean;
 }
 
+export const NAVIGATION_CATEGORIES: Record<NavigationCategoryId, NavigationCategoryMeta> = {
+  dashboards: {
+    id: 'dashboards',
+    label: 'Dashboards',
+    searchLabel: 'Cari dashboard...',
+    order: 1,
+  },
+  operasional: {
+    id: 'operasional',
+    label: 'Operasional',
+    searchLabel: 'Cari modul operasional...',
+    order: 2,
+  },
+  koordinasi: {
+    id: 'koordinasi',
+    label: 'Koordinasi',
+    searchLabel: 'Cari modul koordinasi...',
+    order: 3,
+  },
+  infrastruktur: {
+    id: 'infrastruktur',
+    label: 'Infrastruktur',
+    searchLabel: 'Cari modul infrastruktur...',
+    order: 4,
+  },
+  administrasi: {
+    id: 'administrasi',
+    label: 'Administrasi Sistem',
+    searchLabel: 'Cari modul administrasi...',
+    order: 5,
+  },
+};
+
 export const MODULE_META: Record<AppModule, ModuleMeta> = {
   dashboard: {
     id: 'dashboard',
     label: 'Dashboard',
     description: 'Ringkasan utama workspace.',
+    navigationCategory: 'dashboards',
+    navigationOrder: 1,
     quickAction: null,
     viewFormats: ['grid', 'table'],
   },
@@ -38,6 +83,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'helpdesk',
     label: 'Helpdesk & Ticketing',
     description: 'Aduan pelanggan, intake tiket, dan alur helpdesk.',
+    navigationCategory: 'operasional',
+    navigationOrder: 1,
     searchPlaceholder: 'Cari pelanggan, nomor tiket, atau nomor aduan...',
     quickAction: 'new_ticket',
     viewFormats: ['table', 'grid'],
@@ -46,6 +93,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'noc',
     label: 'NOC Console',
     description: 'Triage teknis, verifikasi sinyal, dan closing tiket.',
+    navigationCategory: 'operasional',
+    navigationOrder: 2,
     searchPlaceholder: 'Cari tiket, ODP, user PPPoE, atau serial ONT...',
     quickAction: null,
     viewFormats: ['table', 'grid'],
@@ -54,6 +103,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'lead_tech',
     label: 'Lead Technician Workspace',
     description: 'Assign work order, review SOP, dan monitoring teknisi.',
+    navigationCategory: 'operasional',
+    navigationOrder: 3,
     searchPlaceholder: 'Cari WO, pelanggan, atau teknisi lapangan...',
     quickAction: null,
     viewFormats: ['table', 'grid'],
@@ -62,6 +113,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'field_tech',
     label: 'Portal Teknisi Lapangan',
     description: 'Eksekusi WO, bukti kerja, dan laporan on-site.',
+    navigationCategory: 'operasional',
+    navigationOrder: 4,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -69,6 +122,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'finance',
     label: 'Finance Desk',
     description: 'Billing pelanggan dan approval procurement finance.',
+    navigationCategory: 'operasional',
+    navigationOrder: 5,
     searchPlaceholder: 'Cari pelanggan, tagihan, PPPoE user, atau status layanan...',
     quickAction: null,
     viewFormats: ['table', 'grid'],
@@ -77,6 +132,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'inventory',
     label: 'Warehouse Console',
     description: 'Stok barang, serial aset, dan permintaan pengadaan.',
+    navigationCategory: 'operasional',
+    navigationOrder: 6,
     searchPlaceholder: 'Cari barang, kode item, brand, atau serial number...',
     quickAction: 'new_procurement',
     viewFormats: ['table', 'grid'],
@@ -85,6 +142,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'kanban',
     label: 'Kanban Koordinasi',
     description: 'Koordinasi tugas antar divisi internal.',
+    navigationCategory: 'koordinasi',
+    navigationOrder: 1,
     searchPlaceholder: 'Cari task, divisi asal/tujuan, atau tenggat kerja...',
     quickAction: 'new_task',
     viewFormats: ['kanban', 'table'],
@@ -93,6 +152,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'network_map',
     label: 'Peta Jaringan',
     description: 'ODP, port binding, dan visualisasi mapping pelanggan.',
+    navigationCategory: 'infrastruktur',
+    navigationOrder: 1,
     searchPlaceholder: 'Cari ID ODP, ODC, pelanggan, atau port splitter...',
     quickAction: null,
     viewFormats: ['map', 'grid'],
@@ -101,6 +162,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'admin_users',
     label: 'Manajemen Akun',
     description: 'CRUD akun login, status aktif, dan reset password.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 1,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -108,6 +171,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'admin_roles',
     label: 'Role & Hak Akses',
     description: 'Pemetaan role dan division aplikasi.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 2,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -115,6 +180,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'admin_master',
     label: 'Master Data',
     description: 'Referensi paket, wilayah, inventory, dan workflow.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 3,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -122,6 +189,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'admin_mappings',
     label: 'Mapping Infrastruktur',
     description: 'ODP, port binding, dan relasi entitas aplikasi.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 4,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -129,6 +198,8 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     id: 'admin_audit',
     label: 'Audit & Session',
     description: 'Jejak aktivitas dan sesi user online.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 5,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -141,11 +212,11 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     subtitle: 'Master data, akun login, role, mapping, dan audit aplikasi.',
     shellMode: 'admin',
     defaultModule: 'dashboard',
-    allowedModules: ['dashboard', 'admin_users', 'admin_roles', 'admin_master', 'admin_mappings', 'admin_audit'],
-    homeLabel: 'System Overview',
+    allowedModules: ['dashboard', 'helpdesk', 'noc', 'lead_tech', 'field_tech', 'finance', 'inventory', 'kanban', 'network_map', 'admin_users', 'admin_roles', 'admin_master', 'admin_mappings', 'admin_audit'],
+    homeLabel: 'Dashboards',
     navigationLabel: 'Modul Administrasi Sistem',
     workspaceLabel: 'Admin Menu',
-    showSearchShortcut: false,
+    showSearchShortcut: true,
     showSidebarNavigation: true,
   },
   management: {
@@ -155,11 +226,11 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'analytics',
     defaultModule: 'dashboard',
     allowedModules: ['dashboard'],
-    homeLabel: 'Executive Overview',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Ringkasan Manajemen',
     workspaceLabel: 'Executive View',
-    showSearchShortcut: false,
-    showSidebarNavigation: false,
+    showSearchShortcut: true,
+    showSidebarNavigation: true,
   },
   helpdesk: {
     role: 'helpdesk',
@@ -168,7 +239,7 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'compact',
     defaultModule: 'helpdesk',
     allowedModules: ['helpdesk', 'kanban'],
-    homeLabel: 'Workspace Helpdesk',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Modul Helpdesk',
     workspaceLabel: 'Helpdesk Menu',
     showSearchShortcut: true,
@@ -181,7 +252,7 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'compact',
     defaultModule: 'noc',
     allowedModules: ['noc', 'network_map', 'kanban'],
-    homeLabel: 'Workspace NOC',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Modul NOC',
     workspaceLabel: 'NOC Menu',
     showSearchShortcut: true,
@@ -194,7 +265,7 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'compact',
     defaultModule: 'lead_tech',
     allowedModules: ['lead_tech', 'kanban'],
-    homeLabel: 'Workspace Lead Tech',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Modul Kepala Teknisi',
     workspaceLabel: 'Lead Tech Menu',
     showSearchShortcut: true,
@@ -207,11 +278,11 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'standalone',
     defaultModule: 'field_tech',
     allowedModules: ['field_tech'],
-    homeLabel: 'Portal Teknisi',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Workspace Teknisi',
     workspaceLabel: 'Field Tech',
-    showSearchShortcut: false,
-    showSidebarNavigation: false,
+    showSearchShortcut: true,
+    showSidebarNavigation: true,
   },
   finance: {
     role: 'finance',
@@ -220,7 +291,7 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'compact',
     defaultModule: 'finance',
     allowedModules: ['finance', 'kanban'],
-    homeLabel: 'Workspace Finance',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Modul Finance',
     workspaceLabel: 'Finance Menu',
     showSearchShortcut: true,
@@ -233,7 +304,7 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
     shellMode: 'compact',
     defaultModule: 'inventory',
     allowedModules: ['inventory', 'kanban'],
-    homeLabel: 'Workspace Gudang',
+    homeLabel: 'Dashboards',
     navigationLabel: 'Modul Gudang',
     workspaceLabel: 'Warehouse Menu',
     showSearchShortcut: true,
@@ -250,3 +321,20 @@ export const isModuleAllowedForRole = (role: UserRole, module: AppModule): boole
 
 export const getAllowedModulesForRole = (role: UserRole): ModuleMeta[] =>
   ROLE_WORKSPACES[role].allowedModules.map((moduleId) => MODULE_META[moduleId]);
+
+export const getNavigationSectionsForRole = (role: UserRole) => {
+  const modules = getAllowedModulesForRole(role);
+  const grouped = modules.reduce<Record<NavigationCategoryId, ModuleMeta[]>>((accumulator, moduleMeta) => {
+    const categoryId = moduleMeta.navigationCategory;
+    accumulator[categoryId] = [...(accumulator[categoryId] ?? []), moduleMeta].sort((left, right) => left.navigationOrder - right.navigationOrder);
+    return accumulator;
+  }, {} as Record<NavigationCategoryId, ModuleMeta[]>);
+
+  return Object.values(NAVIGATION_CATEGORIES)
+    .sort((left, right) => left.order - right.order)
+    .map((category) => ({
+      ...category,
+      modules: grouped[category.id] ?? [],
+    }))
+    .filter((category) => category.modules.length > 0);
+};

@@ -1,47 +1,45 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
-  AlertTriangle,
   Bell,
-  CircleOff,
-  Code2,
+  ChevronDown,
   Columns,
   Database,
-  Grid,
   HelpCircle,
-  KeyRound,
-  Layers,
+  LayoutGrid,
   LogOut,
+  Menu,
   Package,
   Radio,
   ScrollText,
   Search,
   Shield,
-  Sparkles,
-  Sun,
   UserCog,
   Users,
   Wifi,
+  X,
 } from 'lucide-react';
-import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { useIOMS } from '../context/IOMSContext';
 import { useAuth } from '../context/AuthContext';
 import { AppModule } from '../types';
-import { getAllowedModulesForRole, getRoleWorkspace } from '../config/roleWorkspace';
+import {
+  getNavigationSectionsForRole,
+  getRoleWorkspace,
+} from '../config/roleWorkspace';
 
 interface HeaderNavbarProps {
   onOpenArchSpecs: () => void;
-  onOpenWorkflowGuide?: () => void;
-  onToggleSidebar?: () => void;
+  onOpenWorkflowGuide: () => void;
+  onToggleSidebar: () => void;
 }
 
 const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>> = {
-  dashboard: Activity,
+  dashboard: LayoutGrid,
   helpdesk: HelpCircle,
   noc: Radio,
   lead_tech: Shield,
   field_tech: Shield,
-  finance: Layers,
+  finance: Activity,
   inventory: Package,
   kanban: Columns,
   network_map: Wifi,
@@ -52,395 +50,341 @@ const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>
   admin_audit: ScrollText,
 };
 
-const UserAvatar: React.FC<{ src?: string; alt: string; fallback: string; size?: string }> = ({
-  src,
-  alt,
-  fallback,
-  size = 'w-9 h-9',
-}) => {
-  const [hasError, setHasError] = useState(false);
-
-  if (!src || hasError) {
-    return (
-      <div className={`${size} rounded-full bg-slate-900 text-white ring-2 ring-emerald-400 flex items-center justify-center font-bold text-xs shrink-0`}>
-        {fallback}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setHasError(true)}
-      className={`${size} rounded-full object-cover ring-2 ring-emerald-400 shrink-0`}
-    />
-  );
+const shellBadgeClasses: Record<string, string> = {
+  admin: 'bg-emerald-950 text-emerald-100 ring-emerald-500/20',
+  analytics: 'bg-sky-950 text-sky-100 ring-sky-500/20',
+  compact: 'bg-slate-900 text-white ring-slate-300/10',
+  standalone: 'bg-slate-900 text-white ring-slate-300/10',
 };
 
 export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   onOpenArchSpecs,
   onOpenWorkflowGuide,
+  onToggleSidebar,
 }) => {
   const {
     currentUser,
     activeRole,
     selectedModule,
     setSelectedModule,
-    tickets,
-    procurementRequests,
-    users,
-    auditLogs,
   } = useIOMS();
   const { logout } = useAuth();
 
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showNavMenu, setShowNavMenu] = useState(false);
-  const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const allowedModules = getAllowedModulesForRole(activeRole);
-  const activeModule = allowedModules.some((item) => item.id === selectedModule)
-    ? selectedModule
-    : roleWorkspace.defaultModule;
-  const activeModuleMeta = allowedModules.find((item) => item.id === activeModule);
-  const isStandaloneWorkspace = roleWorkspace.shellMode === 'standalone';
+  const navigationSections = getNavigationSectionsForRole(activeRole);
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [navigationQuery, setNavigationQuery] = useState('');
+  const navigationRef = useRef<HTMLDivElement | null>(null);
+  const accountRef = useRef<HTMLDivElement | null>(null);
+  const navigationSearchRef = useRef<HTMLInputElement | null>(null);
 
-  const onlineUsers = users.filter((user) => user.isOnline).length;
-  const inactiveUsers = users.filter((user) => user.isActive === false).length;
-  const openLosTickets = tickets.filter((ticket) => ticket.category === 'los_red_light' && ticket.status !== 'closed').length;
-  const pendingCapex = procurementRequests.filter((procurement) => procurement.status === 'pending_management' || procurement.status === 'pending_finance').length;
-  const totalAlerts = activeRole === 'superadmin'
-    ? inactiveUsers + onlineUsers
-    : openLosTickets + pendingCapex;
+  const filteredSections = useMemo(() => {
+    const query = navigationQuery.trim().toLowerCase();
+    if (!query) {
+      return navigationSections;
+    }
 
-  const accountFallback = useMemo(
-    () => currentUser.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
-    [currentUser.name],
-  );
+    return navigationSections
+      .map((section) => ({
+        ...section,
+        modules: section.modules.filter((moduleMeta) => {
+          const haystack = `${moduleMeta.label} ${moduleMeta.description} ${section.label}`.toLowerCase();
+          return haystack.includes(query);
+        }),
+      }))
+      .filter((section) => section.modules.length > 0);
+  }, [navigationQuery, navigationSections]);
 
-  const notificationBody = activeRole === 'superadmin' ? (
-    <>
-      <div className="p-3 hover:bg-emerald-50/50 transition-colors flex items-start space-x-2.5">
-        <Users className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-bold text-slate-800">{onlineUsers} User Sedang Online</p>
-          <p className="text-[11px] text-slate-500">Pantau akses aplikasi dan aktivitas session internal.</p>
-        </div>
-      </div>
-      <div className="p-3 hover:bg-rose-50/50 transition-colors flex items-start space-x-2.5">
-        <CircleOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-bold text-slate-800">{inactiveUsers} Akun Dalam Status Nonaktif</p>
-          <p className="text-[11px] text-slate-500">Tinjau akun yang diblokir, perlu reset, atau butuh reaktivasi.</p>
-        </div>
-      </div>
-      <div className="p-3 hover:bg-slate-50 transition-colors flex items-start space-x-2.5">
-        <ScrollText className="w-4 h-4 text-slate-700 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-bold text-slate-800">{auditLogs.length} Aktivitas Audit Termuat</p>
-          <p className="text-[11px] text-slate-500">Jejak auth, perubahan status, dan update master data tersedia.</p>
-        </div>
-      </div>
-    </>
-  ) : (
-    <>
-      {openLosTickets > 0 && (
-        <div className="p-3 hover:bg-rose-50/50 transition-colors flex items-start space-x-2.5">
-          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-slate-800">{openLosTickets} Tiket Alarm LOS Merah</p>
-            <p className="text-[11px] text-slate-500">Gangguan teknis yang masih perlu tindak lanjut.</p>
-          </div>
-        </div>
-      )}
-      {pendingCapex > 0 && (
-        <div className="p-3 hover:bg-amber-50/50 transition-colors flex items-start space-x-2.5">
-          <Layers className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-slate-800">{pendingCapex} Pengadaan Menunggu Approval</p>
-            <p className="text-[11px] text-slate-500">Pantau approval procurement lintas divisi.</p>
-          </div>
-        </div>
-      )}
-      <div className="p-3 hover:bg-slate-50 transition-colors flex items-start space-x-2.5">
-        <Activity className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-bold text-slate-800">{activeModuleMeta?.label ?? roleWorkspace.title}</p>
-          <p className="text-[11px] text-slate-500">{activeModuleMeta?.description ?? roleWorkspace.subtitle}</p>
-        </div>
-      </div>
-    </>
-  );
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
 
-  const accountMenu = (
-    <div
-      className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-      onMouseLeave={() => setShowAccountMenu(false)}
-    >
-      <div className="px-3 py-2 border-b border-slate-100">
-        <p className="text-sm font-bold text-slate-900 truncate">{currentUser.name}</p>
-        <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
-        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mt-2">{roleWorkspace.title}</p>
-      </div>
-      <div className="space-y-1 mt-2">
-        <button
-          onClick={() => {
-            setShowAccountMenu(false);
-            setIsChangePasswordOpen(true);
-          }}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs text-slate-700 hover:bg-slate-50"
-        >
-          <KeyRound className="w-4 h-4 text-emerald-600" />
-          <span>Ubah password</span>
-        </button>
-        <button
-          onClick={() => {
-            setShowAccountMenu(false);
-            void logout();
-          }}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs text-rose-700 hover:bg-rose-50"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Logout</span>
-        </button>
-      </div>
-      <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between px-2">
-        <button
-          onClick={() => {
-            setShowAccountMenu(false);
-            onOpenArchSpecs();
-          }}
-          className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
-        >
-          <Code2 className="w-3.5 h-3.5" />
-          <span>Spesifikasi React+Laravel</span>
-        </button>
-        {onOpenWorkflowGuide && (
-          <button
-            onClick={() => {
-              setShowAccountMenu(false);
-              onOpenWorkflowGuide();
-            }}
-            className="text-[10px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{activeRole === 'superadmin' ? 'Admin Playbook' : '6 Alur Kerja'}</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
+      if (navigationRef.current && !navigationRef.current.contains(target)) {
+        setIsNavigationOpen(false);
+      }
 
-  const notificationMenu = (
-    <div
-      className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-      onMouseLeave={() => setShowNotifications(false)}
-    >
-      <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-          {roleWorkspace.title}
-        </span>
-        <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full">
-          {totalAlerts} Alert
-        </span>
-      </div>
-      <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto text-xs">
-        {notificationBody}
-      </div>
-    </div>
-  );
+      if (accountRef.current && !accountRef.current.contains(target)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
 
-  const rightActions = (
-    <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
-      <button
-        className="h-10 w-10 flex items-center justify-center text-amber-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-        title="Mode Tampilan"
-      >
-        <Sun className="w-5 h-5" />
-      </button>
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-      <div className="w-7 h-5 rounded-sm overflow-hidden border border-slate-200 flex flex-col shrink-0" title="Bahasa Indonesia">
-        <div className="h-1/2 bg-red-600 w-full" />
-        <div className="h-1/2 bg-white w-full" />
-      </div>
+  useEffect(() => {
+    if (!isNavigationOpen) {
+      setNavigationQuery('');
+      return;
+    }
 
-      <div className="relative shrink-0">
-        <button
-          onClick={() => setShowNotifications(!showNotifications)}
-          className="h-10 w-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded-full transition-colors relative cursor-pointer"
-          title={roleWorkspace.title}
-        >
-          <Bell className="w-5 h-5" />
-          {totalAlerts > 0 && (
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse" />
-          )}
-        </button>
-        {showNotifications && notificationMenu}
-      </div>
+    window.setTimeout(() => navigationSearchRef.current?.focus(), 50);
+  }, [isNavigationOpen]);
 
-      <div className="relative shrink-0">
-        <button
-          onClick={() => setShowAccountMenu(!showAccountMenu)}
-          className="h-10 pl-2 pr-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2"
-        >
-          <span className="hidden lg:block max-w-48 truncate text-sm font-semibold text-slate-700">
-            {roleWorkspace.title}
-          </span>
-          <UserAvatar
-            src={currentUser.avatar}
-            alt={currentUser.name}
-            fallback={accountFallback}
-          />
-        </button>
-        {showAccountMenu && accountMenu}
-      </div>
-    </div>
-  );
+  const openNavigationMenu = () => {
+    setIsNavigationOpen(true);
+    setIsAccountMenuOpen(false);
+  };
+
+  const handleSelectModule = (moduleId: AppModule) => {
+    setSelectedModule(moduleId);
+    setIsNavigationOpen(false);
+  };
 
   return (
-    <>
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-2xs">
-        {isStandaloneWorkspace ? (
-          <div className="px-4 sm:px-6 lg:px-8 py-3">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-xs text-white bg-linear-to-br from-emerald-600 to-teal-500 shrink-0">
-                  <Wifi className="w-5 h-5" />
-                </div>
-                <div className="hidden sm:flex w-8 h-8 bg-emerald-100 rounded-full items-center justify-center border border-emerald-300 shrink-0">
-                  <span className="text-emerald-700 font-extrabold text-xs">ISP</span>
-                </div>
-                <div className="min-w-0">
-                  <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">PT Solusi Jaringan Nusantara</h1>
-                  <p className="text-[11px] text-slate-500 font-medium truncate">{roleWorkspace.title}</p>
-                </div>
-              </div>
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700 lg:hidden"
+            aria-label="Buka navigasi samping"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-end xl:min-w-0">
-                <div className="flex flex-wrap gap-3 xl:justify-end">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 min-w-[180px]">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace Aktif</p>
-                    <p className="text-sm font-bold text-slate-900 truncate">{activeModuleMeta?.label ?? roleWorkspace.homeLabel}</p>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 min-w-[180px]">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">Akses</p>
-                    <p className="text-sm font-bold text-emerald-900 truncate">Siap kerja lapangan</p>
-                  </div>
-                </div>
-                <div className="xl:pl-2">
-                  {rightActions}
-                </div>
-              </div>
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 shadow-sm ${shellBadgeClasses[roleWorkspace.shellMode]}`}>
+            <Shield className="h-5 w-5" />
+          </div>
+
+          <div className="min-w-0">
+            <div className="truncate text-[clamp(1.1rem,1vw+0.9rem,1.6rem)] font-black tracking-tight text-slate-900">
+              PT Solusi Jaringan Nusantara
+            </div>
+            <div className="truncate text-sm font-medium text-slate-500">
+              {roleWorkspace.title}
             </div>
           </div>
-        ) : (
-          <div className="h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-xs text-white shrink-0 ${
-                roleWorkspace.shellMode === 'admin'
-                  ? 'bg-linear-to-br from-slate-950 to-emerald-700'
-                  : 'bg-linear-to-br from-emerald-600 to-teal-500'
-              }`}>
-                {roleWorkspace.shellMode === 'admin' ? <Shield className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
-              </div>
+        </div>
 
-              <div className="hidden sm:flex w-8 h-8 bg-emerald-100 rounded-full items-center justify-center border border-emerald-300 shrink-0">
-                <span className="text-emerald-700 font-extrabold text-xs">ISP</span>
-              </div>
+        <div className="hidden items-center gap-3 lg:flex">
+          <button
+            type="button"
+            onClick={() => handleSelectModule(roleWorkspace.defaultModule)}
+            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+              selectedModule === roleWorkspace.defaultModule
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <Activity className="h-4 w-4" />
+            <span>{roleWorkspace.homeLabel}</span>
+          </button>
 
-              <div className="min-w-0">
-                <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">PT Solusi Jaringan Nusantara</h1>
-                <p className="text-[11px] text-slate-500 font-medium truncate">{roleWorkspace.title}</p>
-              </div>
-            </div>
+          <div className="relative" ref={navigationRef}>
+            <button
+              type="button"
+              onClick={() => setIsNavigationOpen((current) => !current)}
+              className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                isNavigationOpen
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span>Navigation</span>
+              <ChevronDown className={`h-4 w-4 transition ${isNavigationOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-            <div className="hidden md:flex items-center justify-center gap-6 lg:gap-8 flex-1">
-              <button
-                onClick={() => setSelectedModule(roleWorkspace.defaultModule)}
-                className={`flex flex-col items-center group transition-colors cursor-pointer ${
-                  activeModule === roleWorkspace.defaultModule ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Activity className="w-5 h-5 mb-0.5 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] uppercase font-bold tracking-wider">{roleWorkspace.homeLabel}</span>
-              </button>
+            {isNavigationOpen && (
+              <div className="absolute left-1/2 top-[calc(100%+16px)] z-50 w-[min(1080px,calc(100vw-48px))] -translate-x-1/2 overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_70px_rgba(15,23,42,0.18)]">
+                <div className="border-b border-slate-100 px-6 py-5">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      ref={navigationSearchRef}
+                      type="text"
+                      value={navigationQuery}
+                      onChange={(event) => setNavigationQuery(event.target.value)}
+                      placeholder="Search navigation..."
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-12 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                    />
+                    {navigationQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setNavigationQuery('')}
+                        className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                        aria-label="Kosongkan pencarian"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-              {roleWorkspace.showSidebarNavigation && allowedModules.length > 1 && (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowNavMenu(!showNavMenu)}
-                    className="flex flex-col items-center text-slate-500 hover:text-slate-800 transition-colors group cursor-pointer"
-                  >
-                    <Grid className="w-5 h-5 mb-0.5 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Navigation</span>
-                  </button>
+                <div className="grid max-h-[70vh] grid-cols-1 gap-x-0 overflow-y-auto p-6 md:grid-cols-2 xl:grid-cols-5">
+                  {filteredSections.length > 0 ? (
+                    filteredSections.map((section) => (
+                      <div
+                        key={section.id}
+                        className="min-w-0 border-b border-slate-100 px-0 py-4 md:px-4 xl:border-b-0 xl:border-r xl:border-slate-100 xl:py-0"
+                      >
+                        <div className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-700">
+                          {section.label}
+                        </div>
+                        <div className="space-y-1">
+                          {section.modules.map((moduleMeta) => {
+                            const Icon = moduleIcons[moduleMeta.id];
+                            const isActive = selectedModule === moduleMeta.id;
 
-                  {showNavMenu && (
-                    <div
-                      className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
-                      onMouseLeave={() => setShowNavMenu(false)}
-                    >
-                      <div className="px-3 py-2 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        {roleWorkspace.navigationLabel}
+                            return (
+                              <button
+                                key={moduleMeta.id}
+                                type="button"
+                                onClick={() => handleSelectModule(moduleMeta.id)}
+                                className={`flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                                  isActive
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                              >
+                                <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                                  isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  <Icon className="h-4 w-4" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold">{moduleMeta.label}</span>
+                                  <span className="mt-1 block text-xs leading-5 text-slate-500">
+                                    {moduleMeta.description}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="space-y-1 mt-1 max-h-80 overflow-y-auto">
-                        {allowedModules.map((item) => {
-                          const Icon = moduleIcons[item.id];
-                          const isActive = activeModule === item.id;
-                          return (
-                            <button
-                              key={item.id}
-                              onClick={() => {
-                                setSelectedModule(item.id);
-                                setShowNavMenu(false);
-                              }}
-                              className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                                isActive
-                                  ? 'bg-emerald-50 text-emerald-800 font-semibold'
-                                  : 'text-slate-700 hover:bg-slate-50'
-                              }`}
-                            >
-                              <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold leading-tight truncate">{item.label}</p>
-                                <p className="text-[10px] text-slate-400">{item.description}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
+                    ))
+                  ) : (
+                    <div className="col-span-full flex min-h-[220px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
+                      <div>
+                        <div className="text-base font-semibold text-slate-800">Menu tidak ditemukan</div>
+                        <div className="mt-2 text-sm text-slate-500">
+                          Coba kata kunci lain untuk mencari workspace atau fitur yang diizinkan untuk role ini.
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
-              )}
-
-              {roleWorkspace.showSearchShortcut && activeModuleMeta?.searchPlaceholder && (
-                <button
-                  onClick={() => {
-                    const el = document.getElementById('main-search-input');
-                    if (el) el.focus();
-                  }}
-                  className="flex flex-col items-center text-slate-500 hover:text-slate-800 transition-colors group cursor-pointer"
-                >
-                  <Search className="w-5 h-5 mb-0.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Search</span>
-                </button>
-              )}
-            </div>
-
-            <div className="shrink-0">
-              {rightActions}
-            </div>
+              </div>
+            )}
           </div>
-        )}
-      </header>
 
-      <ChangePasswordModal
-        isOpen={isChangePasswordOpen}
-        onClose={() => setIsChangePasswordOpen(false)}
-      />
-    </>
+          <button
+            type="button"
+            onClick={openNavigationMenu}
+            className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Search className="h-4 w-4" />
+            <span>Search</span>
+          </button>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={onOpenWorkflowGuide}
+            className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700 xl:inline-flex"
+          >
+            Panduan
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenArchSpecs}
+            className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700 xl:inline-flex"
+          >
+            Backend
+          </button>
+
+          <button
+            type="button"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-amber-500 shadow-sm transition hover:border-amber-200 hover:bg-amber-50"
+            aria-label="Theme"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2.5M12 19.5V22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77" />
+            </svg>
+          </button>
+
+          <div className="hidden h-11 items-center rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm sm:flex">
+            ID
+          </div>
+
+          <button
+            type="button"
+            className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700"
+            aria-label="Notifikasi"
+          >
+            <Bell className="h-5 w-5" />
+            <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />
+          </button>
+
+          <div className="relative" ref={accountRef}>
+            <button
+              type="button"
+              onClick={() => setIsAccountMenuOpen((current) => !current)}
+              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 shadow-sm transition hover:border-emerald-200"
+            >
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="h-10 w-10 rounded-2xl object-cover ring-2 ring-emerald-200"
+              />
+              <div className="hidden text-left lg:block">
+                <div className="max-w-[220px] truncate text-sm font-semibold text-slate-800">
+                  {roleWorkspace.title}
+                </div>
+                <div className="max-w-[220px] truncate text-xs text-slate-500">
+                  {currentUser.name}
+                </div>
+              </div>
+              <ChevronDown className={`hidden h-4 w-4 text-slate-500 transition lg:block ${isAccountMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isAccountMenuOpen && (
+              <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-80 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_24px_50px_rgba(15,23,42,0.16)]">
+                <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="h-14 w-14 rounded-2xl object-cover"
+                  />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-slate-900">{currentUser.name}</div>
+                    <div className="truncate text-xs text-slate-500">{currentUser.email}</div>
+                    <div className="mt-1 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      {currentUser.roleTitle}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  <div className="rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Divisi</div>
+                    <div className="mt-1 font-semibold text-slate-800">{currentUser.division}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      void logout();
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    <LogOut className="h-4 w-4 text-rose-300" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
   );
 };
