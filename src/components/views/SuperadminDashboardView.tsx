@@ -4,17 +4,21 @@ import {
   Users,
   KeyRound,
   Network,
-  ScrollText,
   RefreshCw,
   Plus,
   Save,
-  UserCog,
   Database,
   Activity,
   CircleOff,
   Wifi,
   History,
   Server,
+  Search,
+  ArrowRight,
+  FolderKanban,
+  Layers3,
+  Boxes,
+  ClipboardList,
 } from 'lucide-react';
 import {
   AdminAuditItem,
@@ -23,8 +27,10 @@ import {
   MasterDataGroup,
   SystemSession,
   NetworkODP,
+  AppModule,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useIOMS } from '../../context/IOMSContext';
 
 interface SuperadminDashboardViewProps {
   selectedModule: string;
@@ -39,6 +45,22 @@ type AdminMappingPayload = {
   };
   odps: NetworkODP[];
   roleDivisionMap: Array<Record<string, string | number | boolean | null>>;
+};
+
+type OverviewListItem = {
+  id: string;
+  label: string;
+  subtitle: string;
+  count: number;
+  targetModule: AppModule;
+};
+
+type OverviewCardItem = {
+  id: string;
+  title: string;
+  count: number;
+  icon: React.ComponentType<{ className?: string }>;
+  targetModule: AppModule;
 };
 
 const emptyOverview: AdminOverview = {
@@ -95,6 +117,7 @@ const roleOptions = [
 
 export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = ({ selectedModule }) => {
   const { authFetch } = useAuth();
+  const { setSelectedModule } = useIOMS();
   const [overview, setOverview] = useState<AdminOverview>(emptyOverview);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [masterGroups, setMasterGroups] = useState<MasterDataGroup[]>([]);
@@ -179,6 +202,103 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     }),
     [sessions]
   );
+
+  const overviewListItems = useMemo<OverviewListItem[]>(() => {
+    const mappingCount = mappingPayload?.roleDivisionMap.length ?? 0;
+
+    const masterGroupItems = [...masterGroups]
+      .sort((left, right) => right.items.length - left.items.length)
+      .slice(0, 4)
+      .map((group) => ({
+        id: group.key,
+        label: group.label,
+        subtitle: `${group.key} reference`,
+        count: group.items.length,
+        targetModule: 'admin_master' as AppModule,
+      }));
+
+    return [
+      ...masterGroupItems,
+      {
+        id: 'account-admin',
+        label: 'Manajemen Akun',
+        subtitle: 'login_user_admin',
+        count: users.length,
+        targetModule: 'admin_users',
+      },
+      {
+        id: 'role-admin',
+        label: 'Role & Hak Akses',
+        subtitle: 'role_division_map',
+        count: mappingCount,
+        targetModule: 'admin_roles',
+      },
+      {
+        id: 'audit-session',
+        label: 'Audit & Session',
+        subtitle: 'system_activity_log',
+        count: Math.max(overview.auditCount, sessions.length),
+        targetModule: 'admin_audit',
+      },
+    ].slice(0, 6);
+  }, [mappingPayload, masterGroups, overview.auditCount, sessions.length, users.length]);
+
+  const overviewCardItems = useMemo<OverviewCardItem[]>(() => ([
+    {
+      id: 'regions-mapping',
+      title: 'Region & Cluster',
+      count: overview.regionCount,
+      icon: FolderKanban,
+      targetModule: 'admin_master',
+    },
+    {
+      id: 'package-mapping',
+      title: 'Paket Layanan',
+      count: overview.servicePackageCount,
+      icon: Boxes,
+      targetModule: 'admin_master',
+    },
+    {
+      id: 'role-mapping',
+      title: 'Role To Division',
+      count: mappingPayload?.roleDivisionMap.length ?? 0,
+      icon: Layers3,
+      targetModule: 'admin_roles',
+    },
+    {
+      id: 'odp-mapping',
+      title: 'ODP & Port Binding',
+      count: mappingPayload?.networkSummary.totalOdps ?? 0,
+      icon: Network,
+      targetModule: 'admin_mappings',
+    },
+    {
+      id: 'account-mapping',
+      title: 'Loginuser To Modul',
+      count: users.length,
+      icon: Users,
+      targetModule: 'admin_users',
+    },
+    {
+      id: 'audit-review',
+      title: 'Audit & Session',
+      count: overview.auditCount,
+      icon: ClipboardList,
+      targetModule: 'admin_audit',
+    },
+  ]), [mappingPayload, overview.auditCount, overview.regionCount, overview.servicePackageCount, users.length]);
+
+  const filteredOverviewList = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return overviewListItems;
+    }
+
+    return overviewListItems.filter((item) => {
+      const haystack = `${item.label} ${item.subtitle}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [overviewListItems, searchQuery]);
 
   const resetUserForm = () => {
     setEditingUser(null);
@@ -340,30 +460,184 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   };
 
   const renderOverview = () => (
-    <div className="space-y-6">
-      <div className="rounded-[28px] bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 text-white p-6 shadow-xl border border-emerald-900/50">
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <div className="space-y-3 max-w-2xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-300">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              System Administration
-            </span>
-            <h2 className="text-3xl font-black tracking-tight">Pusat kontrol master data dan akses aplikasi</h2>
-            <p className="text-sm text-slate-300">
-              Superadmin mengelola akun login, policy role, referensi master data, mapping infrastruktur, dan jejak perubahan sistem web.
-            </p>
+    <div className="space-y-8">
+      <div className="grid gap-6 xl:grid-cols-[1.9fr_0.95fr]">
+        <div className="overflow-hidden rounded-[34px] border border-emerald-300/60 bg-linear-to-br from-emerald-400 via-emerald-500 to-emerald-600 p-6 text-white shadow-[0_22px_50px_rgba(16,185,129,0.25)] lg:p-8">
+          <div className="flex h-full flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-8">
+            <div className="flex items-start gap-4 lg:w-[28%]">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/25 ring-8 ring-white/10">
+                <ShieldCheck className="h-9 w-9" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-50/90">System Administration</p>
+                <h2 className="text-2xl font-black tracking-tight">Master Data</h2>
+                <p className="max-w-sm text-sm text-emerald-50/85">
+                  Data master aplikasi, akun login, dan struktur referensi operasional dikelola penuh dari workspace ini.
+                </p>
+              </div>
+            </div>
+
+            <div className="hidden w-px bg-white/20 lg:block" />
+
+            <div className="grid flex-1 gap-5 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-black">Master Data</h3>
+                  <p className="mt-1 text-sm text-emerald-50/85">
+                    Kelola wilayah, paket layanan, referensi inventaris, dan workflow utama aplikasi.
+                  </p>
+                </div>
+                <div className="rounded-3xl bg-white/12 p-4 backdrop-blur-sm">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-emerald-50/70">Total Grup Referensi</p>
+                      <p className="mt-2 text-4xl font-black">{overview.masterDataGroupCount}</p>
+                    </div>
+                    <div className="text-right text-sm text-emerald-50/85">
+                      <p>{overview.regionCount} wilayah</p>
+                      <p>{overview.servicePackageCount} paket</p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedModule('admin_master')}
+                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-bold text-emerald-700 shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-50"
+                >
+                  Tambah Data Master
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-black">Mapping Data</h3>
+                  <p className="mt-1 text-sm text-emerald-50/85">
+                    Proses pencocokan role, ODP, port binding, dan relasi data antar modul sistem.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={() => setSelectedModule('admin_mappings')}
+                    className="rounded-3xl bg-white/12 p-4 text-left backdrop-blur-sm transition hover:bg-white/18"
+                  >
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-50/70">ODP Aktif</p>
+                    <p className="mt-2 text-3xl font-black">{mappingPayload?.networkSummary.totalOdps ?? 0}</p>
+                    <p className="mt-2 text-sm text-emerald-50/80">Mapping Infrastruktur</p>
+                  </button>
+                  <button
+                    onClick={() => setSelectedModule('admin_roles')}
+                    className="rounded-3xl bg-white/12 p-4 text-left backdrop-blur-sm transition hover:bg-white/18"
+                  >
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-50/70">Role Mapping</p>
+                    <p className="mt-2 text-3xl font-black">{mappingPayload?.roleDivisionMap.length ?? 0}</p>
+                    <p className="mt-2 text-sm text-emerald-50/80">Role & Hak Akses</p>
+                  </button>
+                </div>
+                <button
+                  onClick={() => void loadAdminData()}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh Data Admin
+                </button>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => void loadAdminData()}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold hover:bg-white/15"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh Data Admin
-          </button>
+        </div>
+
+        <div className="rounded-[34px] border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(15,23,42,0.08)] lg:p-5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Cari Master Data..."
+              className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-16 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-sm"
+              aria-label="Cari data admin"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-6 flex items-center justify-between">
+            <h3 className="text-2xl font-black text-slate-900">Data Master</h3>
+            <span className="rounded-full bg-rose-500 px-3 py-1 text-[11px] font-bold text-white">
+              {filteredOverviewList.length} Tabel
+            </span>
+          </div>
+
+          <div className="mt-4 max-h-[560px] space-y-4 overflow-y-auto pr-1">
+            {filteredOverviewList.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setSelectedModule(item.targetModule)}
+                className="flex w-full items-center gap-4 rounded-[26px] border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40"
+              >
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 ring-1 ring-amber-200">
+                  <Database className="h-7 w-7" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-lg font-bold text-slate-900">{item.label}</p>
+                  <p className="truncate text-sm text-slate-500">{item.subtitle}</p>
+                </div>
+                <span className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-white">
+                  {item.count}
+                </span>
+              </button>
+            ))}
+
+            {filteredOverviewList.length === 0 && (
+              <div className="rounded-[26px] border border-dashed border-slate-200 bg-slate-50 px-5 py-12 text-center">
+                <p className="text-sm font-semibold text-slate-700">Data admin tidak ditemukan</p>
+                <p className="mt-1 text-xs text-slate-500">Coba kata kunci lain untuk mencari master data atau modul admin.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-black text-slate-900">Mapping Data Master</h3>
+          <p className="mt-1 text-sm text-slate-500">Launcher cepat ke area administrasi sistem yang paling sering digunakan superadmin.</p>
+        </div>
+        <span className="rounded-full bg-rose-500 px-3 py-1 text-[11px] font-bold text-white">
+          {overviewCardItems.length} Tabel
+        </span>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {overviewCardItems.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div
+              key={item.id}
+              className="rounded-[30px] border border-slate-200 bg-white p-6 text-center shadow-[0_14px_36px_rgba(15,23,42,0.06)]"
+            >
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-linear-to-br from-sky-100 via-white to-emerald-100 ring-1 ring-slate-200">
+                <Icon className="h-9 w-9 text-emerald-700" />
+              </div>
+              <p className="mt-5 text-lg font-bold text-slate-900">{item.title}</p>
+              <span className="mt-3 inline-flex rounded-full bg-violet-100 px-3 py-1 text-sm font-bold text-violet-700">
+                {item.count}
+              </span>
+              <button
+                onClick={() => setSelectedModule(item.targetModule)}
+                className="mx-auto mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-sky-500 px-6 text-sm font-bold text-white transition hover:bg-sky-600"
+              >
+                Lihat Data
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Total Akun', value: overview.totalUsers, icon: Users, tone: 'text-sky-700 bg-sky-50 border-sky-100' },
           { label: 'Akun Nonaktif', value: overview.inactiveUsers, icon: CircleOff, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
@@ -372,9 +646,9 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         ].map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={item.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div className={`inline-flex rounded-2xl border px-3 py-3 ${item.tone}`}>
-                <Icon className="w-5 h-5" />
+                <Icon className="h-5 w-5" />
               </div>
               <p className="mt-4 text-sm font-semibold text-slate-500">{item.label}</p>
               <p className="mt-1 text-3xl font-black text-slate-950">{item.value}</p>
@@ -382,74 +656,12 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           );
         })}
       </div>
-
-      <div className="grid xl:grid-cols-[1.1fr_0.9fr] gap-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-black text-slate-950">Aksi cepat superadmin</h3>
-              <p className="text-sm text-slate-500">Jalur cepat untuk pekerjaan admin yang paling sering digunakan.</p>
-            </div>
-          </div>
-          <div className="mt-5 grid sm:grid-cols-2 gap-4">
-            {[
-              { label: 'Tambah Akun Login', icon: Plus, hint: 'Buat akun internal baru untuk user/divisi baru.' },
-              { label: 'Buka Role Mapping', icon: UserCog, hint: 'Review pemetaan role dan division yang aktif.' },
-              { label: 'Edit Master Region', icon: Database, hint: 'Sinkronkan cluster, wilayah, dan referensi layanan.' },
-              { label: 'Audit & Session', icon: ScrollText, hint: 'Pantau login/logout dan perubahan konfigurasi aplikasi.' },
-            ].map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => {
-                    if (index === 0) {
-                      openCreateUser();
-                    }
-                  }}
-                  className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:border-emerald-300 hover:bg-emerald-50/50"
-                >
-                  <Icon className="w-5 h-5 text-emerald-700" />
-                  <p className="mt-3 text-sm font-bold text-slate-900">{item.label}</p>
-                  <p className="mt-1 text-xs text-slate-500">{item.hint}</p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-lg font-black text-slate-950">Snapshot master data</h3>
-          <div className="mt-5 space-y-3 text-sm">
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Service Packages</span>
-              <strong>{overview.servicePackageCount}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Regions / Clusters</span>
-              <strong>{overview.regionCount}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Inventory References</span>
-              <strong>{overview.inventoryReferenceCount}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Workflow References</span>
-              <strong>{overview.workflowReferenceCount}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Master Data Groups</span>
-              <strong>{overview.masterDataGroupCount}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 
   const renderUserManagement = () => (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-black text-slate-950">Akun login internal</h3>
@@ -473,7 +685,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="grid grid-cols-[1.2fr_1.2fr_0.7fr_1fr_0.8fr_1fr] gap-3 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
           <span>User</span>
           <span>Email</span>
@@ -525,7 +737,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
     return (
       <div className="space-y-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <div>
             <h3 className="text-lg font-black text-slate-950">Role policy & division mapping</h3>
             <p className="text-sm text-slate-500">Fondasi role system yang dipakai frontend dan backend untuk kontrol akses.</p>
@@ -536,7 +748,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         </div>
         <div className="grid md:grid-cols-2 gap-4">
           {rows.map((row, index) => (
-            <div key={`${row.role ?? 'role'}-${index}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={`${row.role ?? 'role'}-${index}`} className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
               <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">{String(row.role ?? '').replace('_', ' ')}</p>
               <input
                 value={String(row.roleTitle ?? '')}
@@ -562,7 +774,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const renderMasterData = () => (
     <div className="space-y-6">
       <div className="grid lg:grid-cols-[0.35fr_0.65fr] gap-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Kelompok master data</h3>
           <div className="mt-4 space-y-2">
             {masterGroups.map((group) => (
@@ -578,7 +790,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-black text-slate-950">{currentGroup?.label ?? 'Master Data'}</h3>
@@ -624,7 +836,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         ].map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={item.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
               <Icon className="w-5 h-5 text-emerald-700" />
               <p className="mt-4 text-sm font-semibold text-slate-500">{item.label}</p>
               <p className="mt-1 text-3xl font-black text-slate-950">{item.value}</p>
@@ -633,7 +845,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         })}
       </div>
       <div className="grid xl:grid-cols-[1fr_0.9fr] gap-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Ringkasan ODP & port binding</h3>
           <div className="mt-5 space-y-3">
             {mappingPayload?.odps.map((odp) => (
@@ -651,7 +863,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
             ))}
           </div>
         </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Role to division map</h3>
           <div className="mt-5 space-y-3">
             {mappingPayload?.roleDivisionMap.map((item, index) => (
@@ -669,7 +881,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const renderAudit = () => (
     <div className="space-y-6">
       <div className="grid xl:grid-cols-[1.1fr_0.9fr] gap-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Audit trail terbaru</h3>
           <div className="mt-5 space-y-3">
             {overview.latestAuditLogs.map((item: AdminAuditItem) => (
@@ -686,7 +898,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
             ))}
           </div>
         </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Session user</h3>
           <div className="mt-4 flex gap-3">
             <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">Online: {sessionSummary.online}</div>
@@ -743,12 +955,12 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">System Admin Workspace</p>
             <h1 className="mt-2 text-2xl font-black text-slate-950">{moduleTitles[selectedModule]?.title ?? moduleTitles.dashboard.title}</h1>
-            <p className="mt-2 text-sm text-slate-500">{moduleTitles[selectedModule]?.description ?? moduleTitles.dashboard.description}</p>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500">{moduleTitles[selectedModule]?.description ?? moduleTitles.dashboard.description}</p>
           </div>
           {feedback && <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</div>}
           {error && <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
