@@ -86,6 +86,28 @@ export interface ServiceRegistration {
   updatedAt?: string | null;
 }
 
+export interface PipelineStageItem {
+  id: string;
+  label: string;
+  description: string;
+  count: number;
+  statuses: ServiceRegistrationStatus[];
+  accentClass: string;
+}
+
+export interface PipelineRoleDashboardSection {
+  id: string;
+  title: string;
+  description: string;
+  items: ServiceRegistration[];
+}
+
+export interface PipelineActionState {
+  label: string;
+  tone: 'primary' | 'success' | 'danger' | 'muted';
+  disabled?: boolean;
+}
+
 export interface AdminOverview {
   totalUsers: number;
   activeUsers: number;

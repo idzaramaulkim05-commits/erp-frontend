@@ -1,26 +1,35 @@
 import React, { useState } from 'react';
 import {
-  Shield,
-  Wrench,
-  UserCheck,
-  CheckSquare,
-  Clock,
+  Calendar,
+  CheckCircle2,
+  FileCheck2,
   MapPin,
   Phone,
-  FileCheck2,
-  AlertCircle,
-  Camera,
-  CheckCircle2,
-  Calendar,
-  Send,
-  Eye
+  Shield,
+  UserCheck,
+  Wrench,
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
-import { WorkOrder, TroubleTicket } from '../../types';
+import { TroubleTicket, WorkOrder } from '../../types';
+import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
 
 interface LeadTechDashboardViewProps {
   onSelectTicket?: (ticket: TroubleTicket) => void;
 }
+
+const getWorkOrderTone = (status: WorkOrder['status']) => {
+  switch (status) {
+    case 'completed':
+      return 'emerald';
+    case 'waiting_noc_activation':
+    case 'field_submitted':
+      return 'violet';
+    case 'assigned':
+      return 'amber';
+    default:
+      return 'slate';
+  }
+};
 
 export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () => {
   const {
@@ -33,9 +42,6 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
 
   const [selectedTab, setSelectedTab] = useState<'pending_wo' | 'sop_review' | 'all_wo'>('pending_wo');
   const [selectedTech, setSelectedTech] = useState<{ [woId: string]: string }>({});
-  
-  // SOP checklist state for review modal/drawer
-  const [sopReviewingTicket, setSopReviewingTicket] = useState<TroubleTicket | null>(null);
   const [sopChecklist, setSopChecklist] = useState({
     cablesNeatlyClamped: true,
     protectionSleeveInstalled: true,
@@ -44,179 +50,182 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
   });
   const [sopNotes, setSopNotes] = useState('Pemasangan klem rapi, proteksi core terlindungi, redaman -20.2 dBm.');
 
-  // Field technicians list
-  const fieldTechs = users.filter((u) => u.role === 'field_tech' || u.role === 'lead_tech');
-
-  // Tickets awaiting Lead Tech SOP approval
-  const ticketsWaitingSop = tickets.filter(
-    (t) => t.status === 'field_progress' && t.fieldWorkReport?.completedAt
-  );
-
-  const pendingWos = workOrders.filter((w) => ['pending', 'pending_lead_assignment', 'assigned'].includes(w.status));
+  const fieldTechs = users.filter((user) => user.role === 'field_tech' || user.role === 'lead_tech');
+  const ticketsWaitingSop = tickets.filter((ticket) => ticket.status === 'field_progress' && ticket.fieldWorkReport?.completedAt);
+  const pendingWos = workOrders.filter((workOrder) => ['pending', 'pending_lead_assignment', 'assigned'].includes(workOrder.status));
+  const waitingActivation = workOrders.filter((workOrder) => workOrder.status === 'waiting_noc_activation').length;
 
   const handleApproveSop = (ticketId: string) => {
     approveLeadTechSOP(ticketId, sopChecklist, sopNotes);
-    setSopReviewingTicket(null);
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setSelectedTab('pending_wo')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-              selectedTab === 'pending_wo'
-                ? 'bg-sky-700 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Penugasan Work Order ({pendingWos.length})
-          </button>
-          <button
-            onClick={() => setSelectedTab('sop_review')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-              selectedTab === 'sop_review'
-                ? 'bg-purple-700 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Evaluasi SOP Hasil Lapangan ({ticketsWaitingSop.length})
-          </button>
-          <button
-            onClick={() => setSelectedTab('all_wo')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-              selectedTab === 'all_wo'
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Semua Riwayat WO ({workOrders.length})
-          </button>
-        </div>
+      <WorkspaceOpsHero
+        eyebrow="Lead Technician Operations"
+        title="Dispatch work order, kontrol kualitas SOP, dan kesiapan teknisi"
+        subtitle="Area operasional sekunder setelah home pipeline lead tech. Halaman ini memusatkan penugasan teknisi lapangan dan approval SOP sebelum handoff akhir ke NOC."
+        stats={[
+          {
+            label: 'Pending Dispatch',
+            value: pendingWos.length,
+            description: 'Work order yang masih menunggu assignment atau eksekusi awal teknisi.',
+            icon: Wrench,
+            accentClass: 'bg-sky-400/15 text-sky-200',
+          },
+          {
+            label: 'SOP Review',
+            value: ticketsWaitingSop.length,
+            description: 'Laporan lapangan yang menunggu approval kepala teknisi.',
+            icon: FileCheck2,
+            accentClass: 'bg-violet-400/15 text-violet-200',
+          },
+          {
+            label: 'Teknisi Siap',
+            value: fieldTechs.length,
+            description: 'Teknisi yang tersedia untuk assignment work order hari ini.',
+            icon: UserCheck,
+            accentClass: 'bg-emerald-400/15 text-emerald-200',
+          },
+          {
+            label: 'Waiting NOC',
+            value: waitingActivation,
+            description: 'Work order yang sudah selesai lapangan dan menunggu aktivasi NOC.',
+            icon: Shield,
+            accentClass: 'bg-amber-400/15 text-amber-200',
+          },
+        ]}
+      />
 
-        <div className="flex items-center space-x-2 text-xs text-slate-500">
-          <span className="flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-            <UserCheck className="w-3.5 h-3.5" />
-            {fieldTechs.length} Teknisi Siap Tugas
-          </span>
+      <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedTab('pending_wo')}
+            className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
+              selectedTab === 'pending_wo' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Queue Dispatch ({pendingWos.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTab('sop_review')}
+            className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
+              selectedTab === 'sop_review' ? 'bg-violet-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Review SOP Lapangan ({ticketsWaitingSop.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTab('all_wo')}
+            className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
+              selectedTab === 'all_wo' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Semua Work Order ({workOrders.length})
+          </button>
         </div>
       </div>
 
-      {/* 1. SOP Review Queue Section */}
       {selectedTab === 'sop_review' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-purple-50/50 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <FileCheck2 className="w-4 h-4 text-purple-600" />
-                <span>Pemeriksaan Standar Operasional Prosedur (SOP) Lapangan</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Verifikasi kerapian fisik kabel, proteksi drop wire, dan foto bukti sebelum diserahkan ke NOC
-              </p>
-            </div>
-            <span className="text-xs bg-purple-100 text-purple-800 font-bold px-2.5 py-1 rounded-full">
-              {ticketsWaitingSop.length} Menunggu Approval
-            </span>
-          </div>
-
+        <WorkspaceSectionShell
+          eyebrow="SOP Review Queue"
+          title="Pemeriksaan kualitas hasil lapangan sebelum handoff ke NOC"
+          subtitle="Verifikasi kerapian fisik, proteksi kabel, kebersihan area, dan bukti kerja teknisi agar closing NOC tidak menerima laporan yang belum layak."
+          badge={`${ticketsWaitingSop.length} menunggu approval`}
+        >
           {ticketsWaitingSop.length === 0 ? (
             <div className="p-10 text-center text-slate-400">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-500" />
               <p className="text-sm font-semibold text-slate-700">Semua laporan teknisi sudah dievaluasi SOP</p>
-              <p className="text-xs text-slate-500 mt-0.5">Tidak ada laporan pengerjaan lapangan yang pending approval.</p>
+              <p className="mt-0.5 text-xs text-slate-500">Tidak ada laporan pengerjaan lapangan yang masih menunggu approval kepala teknisi.</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {ticketsWaitingSop.map((ticket) => {
                 const report = ticket.fieldWorkReport;
+
                 return (
-                  <div key={ticket.id} className="p-5 hover:bg-slate-50/70 transition-colors">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      {/* Left: Detail */}
-                      <div className="space-y-2 flex-1">
+                  <div key={ticket.id} className="p-5 transition-colors hover:bg-slate-50/70">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                            {ticket.id}
-                          </span>
-                          <span className="text-xs font-semibold text-slate-700">
-                            Pelanggan: {ticket.customerName} ({ticket.customerId})
-                          </span>
-                          <span className="text-xs text-slate-400">• Selesai: {report?.completedAt}</span>
+                          <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">{ticket.id}</span>
+                          <WorkspaceStatusPill label="FIELD SUBMITTED" tone="violet" />
+                          <span className="text-xs text-slate-400">Selesai: {report?.completedAt}</span>
                         </div>
 
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                          <p className="font-bold text-slate-800">Tindakan Lapangan Teknisi ({ticket.assignedTechName || 'Bambang I.'}):</p>
-                          <p className="text-slate-600">{report?.actionTaken}</p>
-                          <div className="flex flex-wrap gap-3 pt-1 text-[11px] font-semibold text-slate-700">
-                            <span>Redaman OPM: <strong className="text-emerald-700">{report?.finalOpticalPowerDbm} dBm</strong></span>
-                            {report?.patchCordReplaced && <span className="text-blue-700">✓ Patch Cord Diganti Baru</span>}
-                            {report?.dropCableLengthMeters && <span>Drop Cable: {report.dropCableLengthMeters}m</span>}
+                        <div>
+                          <h4 className="text-base font-black text-slate-950">{ticket.customerName}</h4>
+                          <p className="mt-1 text-sm text-slate-500">{ticket.description}</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Teknisi</span>
+                            <span className="mt-1 block font-semibold text-slate-800">{ticket.assignedTechName || 'Belum tercatat'}</span>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Redaman OPM</span>
+                            <span className="mt-1 block font-mono font-bold text-emerald-700">{report?.finalOpticalPowerDbm || '-'} dBm</span>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Drop Cable</span>
+                            <span className="mt-1 block font-semibold text-slate-800">{report?.dropCableLengthMeters ? `${report.dropCableLengthMeters} meter` : 'Tidak ada data'}</span>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Patch Cord</span>
+                            <span className="mt-1 block font-semibold text-slate-800">{report?.patchCordReplaced ? 'Diganti baru' : 'Tidak diganti'}</span>
                           </div>
                         </div>
 
-                        {/* SOP Checklist Controls */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-                          <label className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={sopChecklist.cablesNeatlyClamped}
-                              onChange={(e) => setSopChecklist({ ...sopChecklist, cablesNeatlyClamped: e.target.checked })}
-                              className="rounded text-emerald-600 focus:ring-0"
-                            />
-                            <span className="text-[11px] font-medium text-slate-800">Klem Kabel Rapi</span>
-                          </label>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                          <span className="font-bold text-slate-800">Ringkasan tindakan lapangan:</span> {report?.actionTaken || 'Belum ada catatan teknisi.'}
+                        </div>
 
-                          <label className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={sopChecklist.protectionSleeveInstalled}
-                              onChange={(e) => setSopChecklist({ ...sopChecklist, protectionSleeveInstalled: e.target.checked })}
-                              className="rounded text-emerald-600 focus:ring-0"
-                            />
-                            <span className="text-[11px] font-medium text-slate-800">Protection Sleeve</span>
-                          </label>
-
-                          <label className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={sopChecklist.customerAreaCleaned}
-                              onChange={(e) => setSopChecklist({ ...sopChecklist, customerAreaCleaned: e.target.checked })}
-                              className="rounded text-emerald-600 focus:ring-0"
-                            />
-                            <span className="text-[11px] font-medium text-slate-800">Area Bersih</span>
-                          </label>
-
-                          <label className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={sopChecklist.speedtestVerified}
-                              onChange={(e) => setSopChecklist({ ...sopChecklist, speedtestVerified: e.target.checked })}
-                              className="rounded text-emerald-600 focus:ring-0"
-                            />
-                            <span className="text-[11px] font-medium text-slate-800">Speedtest OK</span>
-                          </label>
+                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                          {[
+                            { key: 'cablesNeatlyClamped', label: 'Klem kabel rapi' },
+                            { key: 'protectionSleeveInstalled', label: 'Protection sleeve' },
+                            { key: 'customerAreaCleaned', label: 'Area bersih' },
+                            { key: 'speedtestVerified', label: 'Speedtest OK' },
+                          ].map((item) => (
+                            <label key={item.key} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={sopChecklist[item.key as keyof typeof sopChecklist]}
+                                onChange={(event) =>
+                                  setSopChecklist({
+                                    ...sopChecklist,
+                                    [item.key]: event.target.checked,
+                                  })
+                                }
+                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span>{item.label}</span>
+                            </label>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Right Approval Action */}
-                      <div className="flex flex-col gap-2 shrink-0 lg:w-64 bg-purple-50/60 p-3 rounded-xl border border-purple-200">
-                        <span className="text-xs font-bold text-purple-900">Persetujuan Kepala Teknisi</span>
-                        <input
-                          type="text"
+                      <div className="w-full shrink-0 rounded-[24px] border border-violet-200 bg-violet-50/70 p-4 xl:w-80">
+                        <p className="text-sm font-black text-violet-950">Persetujuan Kepala Teknisi</p>
+                        <p className="mt-1 text-xs text-violet-700">Tambahkan catatan inspeksi akhir sebelum laporan diserahkan ke NOC.</p>
+                        <textarea
                           value={sopNotes}
-                          onChange={(e) => setSopNotes(e.target.value)}
-                          placeholder="Catatan persetujuan SOP..."
-                          className="bg-white border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-hidden"
+                          onChange={(event) => setSopNotes(event.target.value)}
+                          rows={5}
+                          className="mt-4 w-full rounded-2xl border border-violet-200 bg-white px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-violet-300"
                         />
                         <button
+                          type="button"
                           onClick={() => handleApproveSop(ticket.id)}
-                          className="w-full bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-700 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-violet-800"
                         >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Approve SOP (Kirim ke NOC)</span>
+                          <CheckCircle2 className="h-4 w-4" />
+                          Approve SOP dan Kirim ke NOC
                         </button>
                       </div>
                     </div>
@@ -225,78 +234,81 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
               })}
             </div>
           )}
-        </div>
+        </WorkspaceSectionShell>
       )}
 
-      {/* 2. Pending Work Orders Dispatch Section */}
       {(selectedTab === 'pending_wo' || selectedTab === 'all_wo') && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-sky-600" />
-              <span>Daftar Work Order (Pemasangan Baru, Maintenance & Cabut Alat)</span>
-            </h3>
-            <span className="text-xs text-slate-500">
-              Menampilkan {workOrders.length} Work Order
-            </span>
-          </div>
-
+        <WorkspaceSectionShell
+          eyebrow="Dispatch Work Orders"
+          title="Distribusi work order teknisi lapangan"
+          subtitle="Pantau antrean penugasan, cek detail alamat, lalu arahkan teknisi yang paling siap untuk eksekusi pekerjaan."
+          badge={`${selectedTab === 'pending_wo' ? pendingWos.length : workOrders.length} work order terlihat`}
+        >
           <div className="divide-y divide-slate-100">
-            {(selectedTab === 'pending_wo' ? pendingWos : workOrders).map((wo) => {
-              const typeBadge = () => {
-                switch (wo.type) {
-                  case 'installation':
-                    return <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">+ Pasang Baru</span>;
-                  case 'uninstallation':
-                    return <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-300">Cabut Perangkat</span>;
-                  case 'maintenance':
-                    return <span className="bg-sky-100 text-sky-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-sky-300">Maintenance FO</span>;
-                }
-              };
-
-              return (
-                <div key={wo.id} className="p-4 sm:p-5 hover:bg-slate-50/70 transition-colors flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  <div className="space-y-1.5 flex-1">
+            {(selectedTab === 'pending_wo' ? pendingWos : workOrders).map((workOrder) => (
+              <div key={workOrder.id} className="p-5 transition-colors hover:bg-slate-50/70">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="flex-1 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
-                        {wo.id}
-                      </span>
-                      {typeBadge()}
-                      <span className="text-xs text-slate-400">• Jadwal: {wo.scheduledDate}</span>
+                      <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">{workOrder.id}</span>
+                      <WorkspaceStatusPill
+                        label={workOrder.type === 'installation' ? 'PASANG BARU' : workOrder.type === 'uninstallation' ? 'CABUT ALAT' : 'MAINTENANCE'}
+                        tone={workOrder.type === 'installation' ? 'emerald' : workOrder.type === 'uninstallation' ? 'rose' : 'sky'}
+                      />
+                      <WorkspaceStatusPill label={workOrder.status.toUpperCase()} tone={getWorkOrderTone(workOrder.status)} />
                     </div>
 
-                    <h4 className="text-sm font-bold text-slate-900">{wo.customerName} ({wo.customerId})</h4>
-                    <p className="text-xs text-slate-600">{wo.address}</p>
+                    <div>
+                      <h4 className="text-base font-black text-slate-950">{workOrder.customerName}</h4>
+                      <p className="mt-1 text-sm text-slate-500">{workOrder.address}</p>
+                    </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-1">
-                      <span className="flex items-center gap-1 font-medium">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        {wo.odpId} ({wo.region})
-                      </span>
-                      <span className="flex items-center gap-1 font-medium">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        {wo.customerPhone}
-                      </span>
-                      {wo.packagePlan && (
-                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold text-[11px]">
-                          Paket: {wo.packagePlan}
-                        </span>
-                      )}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Wilayah & ODP</span>
+                        <span className="mt-1 block font-semibold text-slate-800">{workOrder.odpId} ({workOrder.region})</span>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Kontak Pelanggan</span>
+                        <span className="mt-1 block font-semibold text-slate-800">{workOrder.customerPhone}</span>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Jadwal</span>
+                        <span className="mt-1 block font-semibold text-slate-800">{workOrder.scheduledDate}</span>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-3 text-xs">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Paket</span>
+                        <span className="mt-1 block font-semibold text-slate-800">{workOrder.packagePlan || 'Belum ditentukan'}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Dispatch Controls */}
-                  <div className="flex items-center space-x-2 shrink-0 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-400 font-semibold">Tugaskan Teknisi:</span>
+                  <div className="w-full shrink-0 rounded-[24px] border border-slate-200 bg-slate-50 p-4 xl:w-80">
+                    <p className="text-sm font-black text-slate-950">Assignment Teknisi</p>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-2xl bg-white p-3 text-xs text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                          <span>Jadwal kerja: <strong className="text-slate-800">{workOrder.scheduledDate}</strong></span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                          <span>{workOrder.odpId} ({workOrder.region})</span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Phone className="h-3.5 w-3.5 text-slate-400" />
+                          <span>{workOrder.customerPhone}</span>
+                        </div>
+                      </div>
+
                       <select
-                        value={selectedTech[wo.id] || wo.assignedTechId || 'USR-06'}
-                        onChange={(e) => {
-                          const techId = e.target.value;
-                          setSelectedTech({ ...selectedTech, [wo.id]: techId });
-                          assignWorkOrderToTech(wo.id, techId);
+                        value={selectedTech[workOrder.id] || workOrder.assignedTechId || fieldTechs[0]?.id || ''}
+                        onChange={(event) => {
+                          const techId = event.target.value;
+                          setSelectedTech({ ...selectedTech, [workOrder.id]: techId });
+                          assignWorkOrderToTech(workOrder.id, techId);
                         }}
-                        className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-hidden cursor-pointer"
+                        className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-300"
                       >
                         {fieldTechs.map((tech) => (
                           <option key={tech.id} value={tech.id}>
@@ -304,33 +316,17 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
                           </option>
                         ))}
                       </select>
-                    </div>
 
-                    <div className="pt-3">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-1 rounded-md ${
-                          wo.status === 'completed'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : wo.status === 'sop_submitted'
-                            ? 'bg-purple-100 text-purple-800'
-                            : wo.status === 'waiting_noc_activation'
-                            ? 'bg-sky-100 text-sky-800'
-                            : wo.status === 'field_submitted'
-                            ? 'bg-violet-100 text-violet-800'
-                            : wo.status === 'assigned'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        {wo.status.toUpperCase()}
-                      </span>
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                        Teknisi terpilih akan langsung menjadi PIC work order ini.
+                      </div>
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
-        </div>
+        </WorkspaceSectionShell>
       )}
     </div>
   );

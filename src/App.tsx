@@ -114,7 +114,7 @@ const MainIOMSApp: React.FC = () => {
           ? <SuperadminDashboardView selectedModule={activeModule} />
           : <ManagementDashboardView />;
       case 'service_registrations':
-        return <ServiceRegistrationsView />;
+        return <ServiceRegistrationsView onOpenNewRegistration={() => setIsCustomerModalOpen(true)} />;
       case 'helpdesk':
         return (
           <HelpdeskView
