@@ -1,0 +1,6 @@
+{
+  "name": "ISP Operations & Management System (IOMS)",
+  "description": "Enterprise-grade role-based operations, network monitoring, ticketing, billing, inventory, and field technician management for Internet Service Providers.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,98 @@
+{
+  "output": "D:\\erp-eonet\\frontend\\deliverables\\IOMS-Internal-Ops-Project-Deck.pptx",
+  "outputBytes": 37432,
+  "slideCount": 8,
+  "slideSize": {
+    "width": 1280,
+    "height": 720
+  },
+  "previewDir": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview",
+  "previewPaths": [
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-01.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-02.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-03.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-04.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-05.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-06.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-07.png",
+    "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\slide-08.png"
+  ],
+  "layoutDir": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final",
+  "layoutResults": [
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-01.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-02.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-03.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-04.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-05.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-06.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-07.layout.json"
+    },
+    {
+      "layoutPath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\layout\\final\\slide-08.layout.json"
+    }
+  ],
+  "contactSheet": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\preview\\contact-sheet.png",
+  "slides": [
+    {
+      "index": 1,
+      "requestedSlideNumber": 1,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-01.mjs",
+      "exportName": "slide01"
+    },
+    {
+      "index": 2,
+      "requestedSlideNumber": 2,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-02.mjs",
+      "exportName": "slide02"
+    },
+    {
+      "index": 3,
+      "requestedSlideNumber": 3,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-03.mjs",
+      "exportName": "slide03"
+    },
+    {
+      "index": 4,
+      "requestedSlideNumber": 4,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-04.mjs",
+      "exportName": "slide04"
+    },
+    {
+      "index": 5,
+      "requestedSlideNumber": 5,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-05.mjs",
+      "exportName": "slide05"
+    },
+    {
+      "index": 6,
+      "requestedSlideNumber": 6,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-06.mjs",
+      "exportName": "slide06"
+    },
+    {
+      "index": 7,
+      "requestedSlideNumber": 7,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-07.mjs",
+      "exportName": "slide07"
+    },
+    {
+      "index": 8,
+      "requestedSlideNumber": 8,
+      "modulePath": "D:\\erp-eonet\\frontend\\outputs\\019ffe4a-250c-7cc1-aedf-dd7770e69361\\presentations\\ioms-project-presentation\\slides\\slide-08.mjs",
+      "exportName": "slide08"
+    }
+  ]
+}
