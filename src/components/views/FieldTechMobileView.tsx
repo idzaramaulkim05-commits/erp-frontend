@@ -18,18 +18,23 @@ import {
 import { useIOMS } from '../../context/IOMSContext';
 import { Customer, WorkOrder } from '../../types';
 
-type WorkQueueFilter = 'all' | 'pending' | 'assigned' | 'in_progress';
+type WorkQueueFilter = 'all' | 'pending_lead_assignment' | 'assigned' | 'in_progress';
 
 const getWorkOrderStatusLabel = (status: WorkOrder['status']) => {
   switch (status) {
     case 'pending':
-      return 'Menunggu Dispatch';
+    case 'pending_lead_assignment':
+      return 'Menunggu Kepala Teknisi';
     case 'assigned':
       return 'Siap Dikerjakan';
     case 'in_progress':
       return 'Sedang Dikerjakan';
     case 'sop_submitted':
       return 'Menunggu Review Lead';
+    case 'field_submitted':
+      return 'Laporan Terkirim';
+    case 'waiting_noc_activation':
+      return 'Menunggu Verifikasi NOC';
     case 'approved':
       return 'Disetujui';
     case 'completed':
@@ -42,11 +47,14 @@ const getWorkOrderStatusLabel = (status: WorkOrder['status']) => {
 const getWorkOrderStatusTone = (status: WorkOrder['status']) => {
   switch (status) {
     case 'pending':
+    case 'pending_lead_assignment':
       return 'bg-amber-100 text-amber-800 border border-amber-200';
     case 'assigned':
       return 'bg-sky-100 text-sky-800 border border-sky-200';
     case 'in_progress':
       return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    case 'waiting_noc_activation':
+      return 'bg-violet-100 text-violet-800 border border-violet-200';
     default:
       return 'bg-slate-100 text-slate-700 border border-slate-200';
   }
@@ -97,6 +105,7 @@ export const FieldTechMobileView: React.FC = () => {
   const myAssignedWos = useMemo(
     () => workOrders.filter((workOrder) => (
       workOrder.status === 'pending' ||
+      workOrder.status === 'pending_lead_assignment' ||
       workOrder.status === 'assigned' ||
       workOrder.status === 'in_progress'
     )),
@@ -132,7 +141,7 @@ export const FieldTechMobileView: React.FC = () => {
   const activeCustomer = getCustomerByWorkOrder(customers, activeWo);
   const todayTaskCount = myAssignedWos.length;
   const inProgressCount = myAssignedWos.filter((workOrder) => workOrder.status === 'in_progress').length;
-  const pendingCount = myAssignedWos.filter((workOrder) => workOrder.status === 'pending' || workOrder.status === 'assigned').length;
+  const pendingCount = myAssignedWos.filter((workOrder) => ['pending', 'pending_lead_assignment', 'assigned'].includes(workOrder.status)).length;
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -223,7 +232,7 @@ export const FieldTechMobileView: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 {[
                   { id: 'all', label: `Semua (${myAssignedWos.length})` },
-                  { id: 'pending', label: `Pending (${myAssignedWos.filter((workOrder) => workOrder.status === 'pending').length})` },
+                  { id: 'pending_lead_assignment', label: `Menunggu Lead (${myAssignedWos.filter((workOrder) => workOrder.status === 'pending_lead_assignment' || workOrder.status === 'pending').length})` },
                   { id: 'assigned', label: `Assigned (${myAssignedWos.filter((workOrder) => workOrder.status === 'assigned').length})` },
                   { id: 'in_progress', label: `Progress (${inProgressCount})` },
                 ].map((filter) => (

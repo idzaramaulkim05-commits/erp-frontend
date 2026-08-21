@@ -1,6 +1,7 @@
 export type UserRole =
   | 'superadmin'
   | 'management'
+  | 'sales'
   | 'noc'
   | 'helpdesk'
   | 'lead_tech'
@@ -10,6 +11,7 @@ export type UserRole =
 
 export type AppModule =
   | 'dashboard'
+  | 'service_registrations'
   | 'helpdesk'
   | 'noc'
   | 'lead_tech'
@@ -36,6 +38,52 @@ export interface UserProfile {
   isOnline: boolean;
   isActive?: boolean;
   lastLoginAt?: string | null;
+}
+
+export type ServiceRegistrationStatus =
+  | 'draft'
+  | 'submitted'
+  | 'pending_finance'
+  | 'finance_approved'
+  | 'finance_rejected'
+  | 'pending_noc'
+  | 'noc_approved'
+  | 'noc_rejected'
+  | 'ready_for_dispatch'
+  | 'field_in_progress'
+  | 'field_submitted'
+  | 'noc_final_verifying'
+  | 'completed'
+  | 'cancelled';
+
+export interface ServiceRegistration {
+  id: string;
+  name: string;
+  nik: string;
+  phone: string;
+  address: string;
+  region: string;
+  packagePlan: string;
+  monthlyFee: number;
+  odpId: string;
+  odpPortCandidate?: number | null;
+  status: ServiceRegistrationStatus;
+  financeStatus: 'pending' | 'approved' | 'rejected';
+  financeNotes?: string | null;
+  financeApprovedBy?: string | null;
+  financeApprovedAt?: string | null;
+  nocStatus: 'pending' | 'approved' | 'rejected';
+  nocNotes?: string | null;
+  nocApprovedBy?: string | null;
+  nocApprovedAt?: string | null;
+  pppoeUsername?: string | null;
+  pppoePassword?: string | null;
+  generatedAt?: string | null;
+  customerId?: string | null;
+  workOrderId?: string | null;
+  requestedBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface AdminOverview {
@@ -197,7 +245,16 @@ export interface TroubleTicket {
 }
 
 export type WorkOrderType = 'installation' | 'maintenance' | 'uninstallation';
-export type WorkOrderStatus = 'pending' | 'assigned' | 'in_progress' | 'sop_submitted' | 'approved' | 'completed';
+export type WorkOrderStatus =
+  | 'pending'
+  | 'pending_lead_assignment'
+  | 'assigned'
+  | 'in_progress'
+  | 'sop_submitted'
+  | 'field_submitted'
+  | 'waiting_noc_activation'
+  | 'approved'
+  | 'completed';
 
 export interface WorkOrder {
   id: string; // e.g. "WO-2026-0412"
@@ -212,6 +269,7 @@ export interface WorkOrder {
   assignedTechId?: string;
   assignedTechName?: string;
   ticketId?: string;
+  serviceRegistrationId?: string;
   status: WorkOrderStatus;
   scheduledDate: string;
   packagePlan?: string;
@@ -229,6 +287,15 @@ export interface WorkOrder {
     ktp?: string;
     opmReading?: string;
     installedDevice?: string;
+  };
+  finalVerification?: {
+    verified?: boolean;
+    verifiedBy?: string;
+    verifiedAt?: string;
+    opticalDbmReading?: number;
+    pppoeSessionActive?: boolean;
+    rxPowerThresholdPassed?: boolean;
+    notes?: string;
   };
   sopVerifiedByLead?: boolean;
   nocActivated?: boolean;

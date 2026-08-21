@@ -4,6 +4,7 @@ import {
   AppModule,
   UserRole,
   UserProfile,
+  ServiceRegistration,
   Customer,
   TroubleTicket,
   WorkOrder,
@@ -39,6 +40,7 @@ interface IOMSContextType {
   viewFormat: 'table' | 'grid' | 'kanban' | 'map';
   setViewFormat: (fmt: 'table' | 'grid' | 'kanban' | 'map') => void;
   customers: Customer[];
+  serviceRegistrations: ServiceRegistration[];
   tickets: TroubleTicket[];
   workOrders: WorkOrder[];
   inventory: InventoryItem[];
@@ -46,6 +48,14 @@ interface IOMSContextType {
   tasks: InterDivisionTask[];
   networkOdps: NetworkODP[];
   auditLogs: ActivityAuditLog[];
+  createServiceRegistration: (payload: Partial<ServiceRegistration>) => void;
+  submitServiceRegistration: (registrationId: string) => void;
+  financeApproveServiceRegistration: (registrationId: string, notes?: string) => void;
+  financeRejectServiceRegistration: (registrationId: string, notes?: string) => void;
+  generateRegistrationPppoe: (registrationId: string) => void;
+  nocApproveServiceRegistration: (registrationId: string, notes?: string, odpPortCandidate?: number) => void;
+  nocRejectServiceRegistration: (registrationId: string, notes?: string) => void;
+  createInstallationWorkOrderFromRegistration: (registrationId: string) => void;
   createCustomer: (customerData: Partial<Customer>, initialDepositPaid: boolean) => void;
   updateCustomerStatus: (customerId: string, status: CustomerStatus, notes?: string) => void;
   createTroubleTicket: (ticketData: Partial<TroubleTicket>) => void;
@@ -81,6 +91,15 @@ interface IOMSContextType {
   ) => void;
   verifyAndCloseNOC: (
     ticketId: string,
+    verification: {
+      opticalDbmReading: number;
+      pppoeSessionActive: boolean;
+      rxPowerThresholdPassed: boolean;
+      notes?: string;
+    }
+  ) => void;
+  nocFinalVerifyInstallation: (
+    workOrderId: string,
     verification: {
       opticalDbmReading: number;
       pppoeSessionActive: boolean;
@@ -131,6 +150,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [dateRange, setDateRange] = useState({ start: '2026-08-01', end: '2026-08-15' });
   const [viewFormat, setViewFormat] = useState<'table' | 'grid' | 'kanban' | 'map'>('table');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [serviceRegistrations, setServiceRegistrations] = useState<ServiceRegistration[]>([]);
   const [tickets, setTickets] = useState<TroubleTicket[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -162,6 +182,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [
       usersPayload,
       customersPayload,
+      registrationsPayload,
       ticketsPayload,
       workOrdersPayload,
       inventoryPayload,
@@ -172,6 +193,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ] = await Promise.all([
       apiRequest<unknown>('/users'),
       apiRequest<unknown>('/customers'),
+      apiRequest<unknown>('/service-registrations'),
       apiRequest<unknown>('/tickets'),
       apiRequest<unknown>('/work-orders'),
       apiRequest<unknown>('/inventory'),
@@ -184,6 +206,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const nextUsers = withAvatarFallback(unwrapCollection<UserProfile>(usersPayload));
     setUsers(nextUsers.length > 0 ? nextUsers : INITIAL_USERS);
     setCustomers(unwrapCollection<Customer>(customersPayload));
+    setServiceRegistrations(unwrapCollection<ServiceRegistration>(registrationsPayload));
     setTickets(unwrapCollection<TroubleTicket>(ticketsPayload));
     setWorkOrders(unwrapCollection<WorkOrder>(workOrdersPayload));
     setInventory(unwrapCollection<InventoryItem>(inventoryPayload));
@@ -232,6 +255,83 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     })();
   };
+
+  const createServiceRegistration = (payload: Partial<ServiceRegistration>) => runMutation(async () => {
+    await apiRequest('/service-registrations', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: payload.name,
+        nik: payload.nik,
+        phone: payload.phone,
+        address: payload.address,
+        region: payload.region,
+        package_plan: payload.packagePlan,
+        monthly_fee: payload.monthlyFee,
+        odp_id: payload.odpId,
+      }),
+    });
+    await refreshAll();
+    triggerCelebration();
+  });
+
+  const submitServiceRegistration = (registrationId: string) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await refreshAll();
+  });
+
+  const financeApproveServiceRegistration = (registrationId: string, notes?: string) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/finance-approve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const financeRejectServiceRegistration = (registrationId: string, notes?: string) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/finance-reject`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const generateRegistrationPppoe = (registrationId: string) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/generate-pppoe`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await refreshAll();
+  });
+
+  const nocApproveServiceRegistration = (registrationId: string, notes?: string, odpPortCandidate?: number) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/noc-approve`, {
+      method: 'POST',
+      body: JSON.stringify({
+        notes,
+        odp_port_candidate: odpPortCandidate,
+      }),
+    });
+    await refreshAll();
+  });
+
+  const nocRejectServiceRegistration = (registrationId: string, notes?: string) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/noc-reject`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const createInstallationWorkOrderFromRegistration = (registrationId: string) => runMutation(async () => {
+    await apiRequest(`/service-registrations/${registrationId}/create-work-order`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await refreshAll();
+  });
 
   const createCustomer = (customerData: Partial<Customer>, initialDepositPaid: boolean) => runMutation(async () => {
     await apiRequest('/customers', {
@@ -370,6 +470,25 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     triggerCelebration();
   });
 
+  const nocFinalVerifyInstallation = (workOrderId: string, verification: {
+    opticalDbmReading: number;
+    pppoeSessionActive: boolean;
+    rxPowerThresholdPassed: boolean;
+    notes?: string;
+  }) => runMutation(async () => {
+    await apiRequest(`/work-orders/${workOrderId}/noc-final-verify`, {
+      method: 'POST',
+      body: JSON.stringify({
+        optical_dbm_reading: verification.opticalDbmReading,
+        pppoe_session_active: verification.pppoeSessionActive,
+        rx_power_threshold_passed: verification.rxPowerThresholdPassed,
+        notes: verification.notes,
+      }),
+    });
+    await refreshAll();
+    triggerCelebration();
+  });
+
   const createProcurementRequest = (req: Partial<ProcurementRequest>) => runMutation(async () => {
     await apiRequest('/procurements', {
       method: 'POST',
@@ -468,6 +587,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         viewFormat,
         setViewFormat,
         customers,
+        serviceRegistrations,
         tickets,
         workOrders,
         inventory,
@@ -475,6 +595,14 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         tasks,
         networkOdps,
         auditLogs,
+        createServiceRegistration,
+        submitServiceRegistration,
+        financeApproveServiceRegistration,
+        financeRejectServiceRegistration,
+        generateRegistrationPppoe,
+        nocApproveServiceRegistration,
+        nocRejectServiceRegistration,
+        createInstallationWorkOrderFromRegistration,
         createCustomer,
         updateCustomerStatus,
         createTroubleTicket,
@@ -485,6 +613,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         submitFieldTechReport,
         approveLeadTechSOP,
         verifyAndCloseNOC,
+        nocFinalVerifyInstallation,
         createProcurementRequest,
         approveProcurementByFinance,
         approveProcurementByManagement,

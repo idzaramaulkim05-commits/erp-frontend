@@ -35,6 +35,17 @@ export const INITIAL_USERS: UserProfile[] = [
   },
   {
     id: 'USR-03',
+    name: 'Raka Pratama',
+    email: 'sales@isp-ops.net',
+    role: 'sales',
+    roleTitle: 'Sales Fiber Consultant',
+    division: 'Sales & Acquisition',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    phone: '081355667788',
+    isOnline: true,
+  },
+  {
+    id: 'USR-04',
     name: 'Ahmad Fauzi (NOC Lead)',
     email: 'noc.lead@isp-ops.net',
     role: 'noc',
@@ -45,7 +56,7 @@ export const INITIAL_USERS: UserProfile[] = [
     isOnline: true,
   },
   {
-    id: 'USR-04',
+    id: 'USR-05',
     name: 'Rina Kartika',
     email: 'helpdesk@isp-ops.net',
     role: 'helpdesk',
@@ -56,7 +67,7 @@ export const INITIAL_USERS: UserProfile[] = [
     isOnline: true,
   },
   {
-    id: 'USR-05',
+    id: 'USR-06',
     name: 'Supriyadi (Pak Pri)',
     email: 'lead.tech@isp-ops.net',
     role: 'lead_tech',
@@ -67,7 +78,7 @@ export const INITIAL_USERS: UserProfile[] = [
     isOnline: true,
   },
   {
-    id: 'USR-06',
+    id: 'USR-07',
     name: 'Bambang Irawan',
     email: 'teknisi.bambang@isp-ops.net',
     role: 'field_tech',
@@ -78,7 +89,7 @@ export const INITIAL_USERS: UserProfile[] = [
     isOnline: true,
   },
   {
-    id: 'USR-07',
+    id: 'USR-08',
     name: 'Dinda Permata S.Ak',
     email: 'finance.billing@isp-ops.net',
     role: 'finance',
@@ -89,7 +100,7 @@ export const INITIAL_USERS: UserProfile[] = [
     isOnline: true,
   },
   {
-    id: 'USR-08',
+    id: 'USR-09',
     name: 'Joko Widodo (Gudang)',
     email: 'gudang.inventory@isp-ops.net',
     role: 'inventory',

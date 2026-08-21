@@ -107,6 +107,7 @@ const moduleTitles: Record<string, { title: string; description: string }> = {
 const roleOptions = [
   { value: 'superadmin', label: 'Super Administrator', division: 'IT & System Development' },
   { value: 'management', label: 'Direktur Operasional & Bisnis', division: 'Executive Management' },
+  { value: 'sales', label: 'Sales Fiber Consultant', division: 'Sales & Acquisition' },
   { value: 'noc', label: 'Senior Network Engineer', division: 'Network Operation Center' },
   { value: 'helpdesk', label: 'Customer Care & Helpdesk', division: 'Customer Service & Helpdesk' },
   { value: 'lead_tech', label: 'Kepala Teknisi Lapangan', division: 'Field Operations & Dispatch' },

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Columns,
+  ClipboardList,
   Code2,
   Database,
   HelpCircle,
@@ -27,6 +28,7 @@ interface SidebarNavProps {
 
 const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutGrid,
+  service_registrations: ClipboardList,
   helpdesk: HelpCircle,
   noc: Radio,
   lead_tech: Shield,

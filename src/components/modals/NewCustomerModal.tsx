@@ -8,7 +8,7 @@ interface NewCustomerModalProps {
 }
 
 export const NewCustomerModal: React.FC<NewCustomerModalProps> = ({ isOpen, onClose }) => {
-  const { createCustomer, networkOdps } = useIOMS();
+  const { activeRole, createCustomer, createServiceRegistration, networkOdps } = useIOMS();
 
   const [name, setName] = useState('Ir. Hendra Kusuma');
   const [phone, setPhone] = useState('0812-9876-5432');
@@ -32,16 +32,29 @@ export const NewCustomerModal: React.FC<NewCustomerModalProps> = ({ isOpen, onCl
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    createCustomer({
-      name,
-      phone,
-      nik,
-      address,
-      region,
-      packagePlan,
-      monthlyFee,
-      odpId: selectedOdpId,
-    }, true);
+    if (activeRole === 'sales') {
+      createServiceRegistration({
+        name,
+        phone,
+        nik,
+        address,
+        region,
+        packagePlan,
+        monthlyFee,
+        odpId: selectedOdpId,
+      });
+    } else {
+      createCustomer({
+        name,
+        phone,
+        nik,
+        address,
+        region,
+        packagePlan,
+        monthlyFee,
+        odpId: selectedOdpId,
+      }, true);
+    }
 
     onClose();
   };
@@ -53,7 +66,9 @@ export const NewCustomerModal: React.FC<NewCustomerModalProps> = ({ isOpen, onCl
         <div className="px-6 py-4 bg-emerald-800 text-white flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <UserPlus className="w-5 h-5 text-emerald-300" />
-            <h3 className="text-sm font-bold">Registrasi & Pemasangan Baru Pelanggan</h3>
+            <h3 className="text-sm font-bold">
+              {activeRole === 'sales' ? 'Input Registrasi Pasang Baru' : 'Registrasi & Pemasangan Baru Pelanggan'}
+            </h3>
           </div>
           <button
             onClick={onClose}
@@ -166,8 +181,17 @@ export const NewCustomerModal: React.FC<NewCustomerModalProps> = ({ isOpen, onCl
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>Otomatisasi Sistem:</span>
             </div>
-            <p>1. Akun PPPoE & Password Acak Unik (10 Digit) otomatis dibuat.</p>
-            <p>2. Work Order Pemasangan Baru langsung diterbitkan ke antrian Kepala Teknisi.</p>
+            {activeRole === 'sales' ? (
+              <>
+                <p>1. Data registrasi baru masuk ke antrean finance untuk approval biaya dan deposit.</p>
+                <p>2. Setelah finance dan NOC approve, sistem akan membuat PPPoE dan WO instalasi otomatis.</p>
+              </>
+            ) : (
+              <>
+                <p>1. Akun PPPoE & Password Acak Unik otomatis dibuat.</p>
+                <p>2. Work Order Pemasangan Baru langsung diterbitkan ke antrean Kepala Teknisi.</p>
+              </>
+            )}
           </div>
 
           <div className="pt-2 flex items-center justify-end space-x-2">
@@ -183,7 +207,7 @@ export const NewCustomerModal: React.FC<NewCustomerModalProps> = ({ isOpen, onCl
               className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-xs flex items-center gap-1.5"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              <span>Daftarkan & Terbitkan WO</span>
+              <span>{activeRole === 'sales' ? 'Simpan Draft Registrasi' : 'Daftarkan & Terbitkan WO'}</span>
             </button>
           </div>
         </form>

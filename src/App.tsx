@@ -15,6 +15,7 @@ import { SearchAndFilterBar } from './components/SearchAndFilterBar';
 
 // Views
 import { HelpdeskView } from './components/views/HelpdeskView';
+import { ServiceRegistrationsView } from './components/views/ServiceRegistrationsView';
 import { NOCDashboardView } from './components/views/NOCDashboardView';
 import { LeadTechDashboardView } from './components/views/LeadTechDashboardView';
 import { FieldTechMobileView } from './components/views/FieldTechMobileView';
@@ -112,6 +113,8 @@ const MainIOMSApp: React.FC = () => {
         return activeRole === 'superadmin'
           ? <SuperadminDashboardView selectedModule={activeModule} />
           : <ManagementDashboardView />;
+      case 'service_registrations':
+        return <ServiceRegistrationsView />;
       case 'helpdesk':
         return (
           <HelpdeskView

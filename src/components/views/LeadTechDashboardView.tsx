@@ -52,7 +52,7 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
     (t) => t.status === 'field_progress' && t.fieldWorkReport?.completedAt
   );
 
-  const pendingWos = workOrders.filter((w) => w.status === 'pending' || w.status === 'assigned');
+  const pendingWos = workOrders.filter((w) => ['pending', 'pending_lead_assignment', 'assigned'].includes(w.status));
 
   const handleApproveSop = (ticketId: string) => {
     approveLeadTechSOP(ticketId, sopChecklist, sopNotes);
@@ -242,7 +242,7 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
           </div>
 
           <div className="divide-y divide-slate-100">
-            {workOrders.map((wo) => {
+            {(selectedTab === 'pending_wo' ? pendingWos : workOrders).map((wo) => {
               const typeBadge = () => {
                 switch (wo.type) {
                   case 'installation':
@@ -313,7 +313,13 @@ export const LeadTechDashboardView: React.FC<LeadTechDashboardViewProps> = () =>
                             ? 'bg-emerald-100 text-emerald-800'
                             : wo.status === 'sop_submitted'
                             ? 'bg-purple-100 text-purple-800'
-                            : 'bg-amber-100 text-amber-800'
+                            : wo.status === 'waiting_noc_activation'
+                            ? 'bg-sky-100 text-sky-800'
+                            : wo.status === 'field_submitted'
+                            ? 'bg-violet-100 text-violet-800'
+                            : wo.status === 'assigned'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-800'
                         }`}
                       >
                         {wo.status.toUpperCase()}

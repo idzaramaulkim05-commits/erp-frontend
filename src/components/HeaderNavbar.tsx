@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Bell,
+  ClipboardList,
   ChevronDown,
   Columns,
   Database,
@@ -35,6 +36,7 @@ interface HeaderNavbarProps {
 
 const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutGrid,
+  service_registrations: ClipboardList,
   helpdesk: HelpCircle,
   noc: Radio,
   lead_tech: Shield,
