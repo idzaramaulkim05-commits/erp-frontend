@@ -1,4 +1,4 @@
-import { AppModule, UserRole } from '../types';
+import { AppModule, KnownUserRole, NavigationConfig, UserRole } from '../types';
 
 export type RoleShellMode = 'admin' | 'analytics' | 'compact' | 'standalone';
 export type QuickActionType = 'new_ticket' | 'new_customer' | 'new_task' | 'new_procurement' | null;
@@ -35,6 +35,16 @@ export interface RoleWorkspaceConfig {
   showSearchShortcut: boolean;
   showSidebarNavigation: boolean;
 }
+
+export const SUPERADMIN_DASHBOARD_MODULES: AppModule[] = [
+  'admin_users',
+  'admin_roles',
+  'admin_master',
+  'admin_modules',
+  'admin_module_roles',
+  'admin_mappings',
+  'admin_audit',
+];
 
 export const NAVIGATION_CATEGORIES: Record<NavigationCategoryId, NavigationCategoryMeta> = {
   dashboards: {
@@ -195,12 +205,30 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     quickAction: null,
     viewFormats: ['table'],
   },
+  admin_modules: {
+    id: 'admin_modules',
+    label: 'Master Data Modul',
+    description: 'Daftar modul aplikasi, kepala navigasi, dan link akses internal.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 4,
+    quickAction: null,
+    viewFormats: ['table'],
+  },
+  admin_module_roles: {
+    id: 'admin_module_roles',
+    label: 'Modul To Role',
+    description: 'Mapping modul terhadap role untuk menentukan menu navigasi.',
+    navigationCategory: 'administrasi',
+    navigationOrder: 5,
+    quickAction: null,
+    viewFormats: ['table'],
+  },
   admin_mappings: {
     id: 'admin_mappings',
     label: 'Mapping Infrastruktur',
     description: 'ODP, port binding, dan relasi entitas aplikasi.',
     navigationCategory: 'administrasi',
-    navigationOrder: 4,
+    navigationOrder: 6,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -209,20 +237,34 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'Audit & Session',
     description: 'Jejak aktivitas dan sesi user online.',
     navigationCategory: 'administrasi',
-    navigationOrder: 5,
+    navigationOrder: 7,
     quickAction: null,
     viewFormats: ['table'],
   },
 };
 
-export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
+const FALLBACK_ROLE_WORKSPACE: RoleWorkspaceConfig = {
+  role: 'custom_role',
+  title: 'Role Workspace',
+  subtitle: 'Workspace generik untuk role hasil master data dan mapping navigasi.',
+  shellMode: 'compact',
+  defaultModule: 'dashboard',
+  allowedModules: ['dashboard'],
+  homeLabel: 'Dashboards',
+  navigationLabel: 'Mapped Navigation',
+  workspaceLabel: 'Role Menu',
+  showSearchShortcut: true,
+  showSidebarNavigation: true,
+};
+
+export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
   superadmin: {
     role: 'superadmin',
     title: 'System Administration',
     subtitle: 'Master data, akun login, role, mapping, dan audit aplikasi.',
     shellMode: 'admin',
     defaultModule: 'dashboard',
-    allowedModules: ['dashboard', 'service_registrations', 'helpdesk', 'noc', 'lead_tech', 'field_tech', 'finance', 'inventory', 'kanban', 'network_map', 'admin_users', 'admin_roles', 'admin_master', 'admin_mappings', 'admin_audit'],
+    allowedModules: ['dashboard', 'service_registrations', 'helpdesk', 'noc', 'lead_tech', 'field_tech', 'finance', 'inventory', 'kanban', 'network_map', 'admin_users', 'admin_roles', 'admin_master', 'admin_modules', 'admin_module_roles', 'admin_mappings', 'admin_audit'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Modul Administrasi Sistem',
     workspaceLabel: 'Admin Menu',
@@ -335,15 +377,36 @@ export const ROLE_WORKSPACES: Record<UserRole, RoleWorkspaceConfig> = {
   },
 };
 
-export const getRoleWorkspace = (role: UserRole): RoleWorkspaceConfig => ROLE_WORKSPACES[role];
+export const getRoleWorkspace = (role: UserRole): RoleWorkspaceConfig => (
+  ROLE_WORKSPACES[role as KnownUserRole] ?? { ...FALLBACK_ROLE_WORKSPACE, role }
+);
 
-export const getDefaultModuleForRole = (role: UserRole): AppModule => ROLE_WORKSPACES[role].defaultModule;
+export const getDefaultModuleForRole = (role: UserRole): AppModule => getRoleWorkspace(role).defaultModule;
+
+export const getResolvedAllowedModules = (role: UserRole, navigationConfig?: NavigationConfig | null): AppModule[] => {
+  const fallbackModules = getRoleWorkspace(role).allowedModules;
+  const mappedModules = navigationConfig?.allowedModuleKeys?.length
+    ? navigationConfig.allowedModuleKeys.filter((moduleKey): moduleKey is AppModule => Object.prototype.hasOwnProperty.call(MODULE_META, moduleKey))
+    : fallbackModules;
+
+  if (role === 'superadmin') {
+    return Array.from(new Set([...mappedModules, ...SUPERADMIN_DASHBOARD_MODULES]));
+  }
+
+  return mappedModules;
+};
 
 export const isModuleAllowedForRole = (role: UserRole, module: AppModule): boolean =>
-  ROLE_WORKSPACES[role].allowedModules.includes(module);
+  getRoleWorkspace(role).allowedModules.includes(module);
 
-export const getAllowedModulesForRole = (role: UserRole): ModuleMeta[] =>
-  ROLE_WORKSPACES[role].allowedModules.map((moduleId) => MODULE_META[moduleId]);
+export const getAllowedModulesForRole = (role: UserRole): ModuleMeta[] => {
+  const workspace = getRoleWorkspace(role);
+  const moduleIds = role === 'superadmin'
+    ? workspace.allowedModules.filter((moduleId) => !SUPERADMIN_DASHBOARD_MODULES.includes(moduleId))
+    : workspace.allowedModules;
+
+  return moduleIds.map((moduleId) => MODULE_META[moduleId]);
+};
 
 export const getNavigationSectionsForRole = (role: UserRole) => {
   const modules = getAllowedModulesForRole(role);

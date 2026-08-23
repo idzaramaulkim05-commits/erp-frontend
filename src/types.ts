@@ -1,4 +1,4 @@
-export type UserRole =
+export type KnownUserRole =
   | 'superadmin'
   | 'management'
   | 'sales'
@@ -8,6 +8,8 @@ export type UserRole =
   | 'field_tech'
   | 'finance'
   | 'inventory';
+
+export type UserRole = KnownUserRole | (string & {});
 
 export type AppModule =
   | 'dashboard'
@@ -23,8 +25,12 @@ export type AppModule =
   | 'admin_users'
   | 'admin_roles'
   | 'admin_master'
+  | 'admin_modules'
+  | 'admin_module_roles'
   | 'admin_mappings'
   | 'admin_audit';
+
+export type ImplementedAppModule = AppModule;
 
 export interface UserProfile {
   id: string;
@@ -127,6 +133,50 @@ export interface AdminUser extends UserProfile {
   lastLoginAt: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+}
+
+export interface RoleMeta {
+  role: UserRole;
+  roleTitle: string;
+  division: string;
+  description?: string | null;
+  isActive: boolean;
+  sortOrder?: number;
+}
+
+export interface NavigationHead {
+  key: string;
+  label: string;
+  order: number;
+  isActive: boolean;
+}
+
+export interface AdminModule {
+  key: string;
+  label: string;
+  description: string;
+  navigationHeadKey: string;
+  order: number;
+  routeTarget: string;
+  quickAction: 'new_ticket' | 'new_customer' | 'new_task' | 'new_procurement' | null;
+  viewFormats: Array<'table' | 'grid' | 'kanban' | 'map'>;
+  isActive: boolean;
+  showInNavbar: boolean;
+  adminOnlyDashboard: boolean;
+}
+
+export interface RoleModuleMapping {
+  role: UserRole;
+  moduleKey: string;
+  isVisible: boolean;
+  orderOverride?: number | null;
+}
+
+export interface NavigationConfig {
+  role: UserRole;
+  heads: NavigationHead[];
+  modules: AdminModule[];
+  allowedModuleKeys: string[];
 }
 
 export interface MasterDataGroup {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Bell,
@@ -27,6 +28,7 @@ import {
   getNavigationSectionsForRole,
   getRoleWorkspace,
 } from '../config/roleWorkspace';
+import { getDefaultRouteForRole, getRoutePathForModule, isImplementedAppModule, resolveModuleRouteTarget } from '../routing/moduleRoutes';
 
 interface HeaderNavbarProps {
   onOpenArchSpecs: () => void;
@@ -48,6 +50,8 @@ const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>
   admin_users: Users,
   admin_roles: UserCog,
   admin_master: Database,
+  admin_modules: Database,
+  admin_module_roles: Columns,
   admin_mappings: Wifi,
   admin_audit: ScrollText,
 };
@@ -68,12 +72,38 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
     currentUser,
     activeRole,
     selectedModule,
-    setSelectedModule,
+    navigationConfig,
   } = useIOMS();
   const { logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const navigationSections = getNavigationSectionsForRole(activeRole);
+  const homeRoute = getDefaultRouteForRole(activeRole, navigationConfig);
+  const navigationSections = navigationConfig && navigationConfig.heads.length > 0
+    ? navigationConfig.heads
+        .sort((left, right) => left.order - right.order)
+        .map((head) => ({
+          id: head.key,
+          label: head.label,
+          searchLabel: head.label,
+          order: head.order,
+          modules: navigationConfig.modules
+            .filter((module) =>
+              module.navigationHeadKey === head.key &&
+              navigationConfig.allowedModuleKeys.includes(module.key) &&
+              isImplementedAppModule(module.key),
+            )
+            .sort((left, right) => left.order - right.order)
+            .map((module) => ({
+              id: module.key as AppModule,
+              label: module.label,
+              description: module.description,
+              routeTarget: resolveModuleRouteTarget(module.routeTarget, module.key),
+            })),
+        }))
+        .filter((head) => head.modules.length > 0)
+    : getNavigationSectionsForRole(activeRole);
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [navigationQuery, setNavigationQuery] = useState('');
@@ -129,8 +159,9 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
     setIsAccountMenuOpen(false);
   };
 
-  const handleSelectModule = (moduleId: AppModule) => {
-    setSelectedModule(moduleId);
+  const handleSelectModule = (moduleId: AppModule, routeTarget?: string) => {
+    const nextPath = routeTarget ?? getRoutePathForModule(moduleId);
+    navigate(nextPath);
     setIsNavigationOpen(false);
   };
 
@@ -164,9 +195,9 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
         <div className="hidden items-center gap-3 lg:flex">
           <button
             type="button"
-            onClick={() => handleSelectModule(roleWorkspace.defaultModule)}
+            onClick={() => navigate(homeRoute)}
             className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-              selectedModule === roleWorkspace.defaultModule
+              location.pathname === homeRoute
                 ? 'bg-emerald-50 text-emerald-700'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
@@ -228,14 +259,16 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                         </div>
                         <div className="space-y-1">
                           {section.modules.map((moduleMeta) => {
-                            const Icon = moduleIcons[moduleMeta.id];
-                            const isActive = selectedModule === moduleMeta.id;
+                            const moduleId = moduleMeta.id as AppModule;
+                            const Icon = moduleIcons[moduleId];
+                            const routeTarget = 'routeTarget' in moduleMeta ? moduleMeta.routeTarget : getRoutePathForModule(moduleId);
+                            const isActive = location.pathname === routeTarget || selectedModule === moduleId;
 
                             return (
                               <button
-                                key={moduleMeta.id}
+                                key={moduleId}
                                 type="button"
-                                onClick={() => handleSelectModule(moduleMeta.id)}
+                                onClick={() => handleSelectModule(moduleId, routeTarget)}
                                 className={`flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition ${
                                   isActive
                                     ? 'bg-emerald-50 text-emerald-700'

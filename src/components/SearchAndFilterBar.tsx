@@ -10,7 +10,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useIOMS } from '../context/IOMSContext';
-import { getAllowedModulesForRole, getRoleWorkspace } from '../config/roleWorkspace';
+import { MODULE_META, getAllowedModulesForRole, getResolvedAllowedModules, getRoleWorkspace } from '../config/roleWorkspace';
 
 interface SearchAndFilterBarProps {
   onOpenNewTicket: () => void;
@@ -42,10 +42,25 @@ export const SearchAndFilterBar: React.FC<SearchAndFilterBarProps> = ({
     selectedOdpFilter,
     setSelectedOdpFilter,
     networkOdps,
+    navigationConfig,
   } = useIOMS();
 
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const allowedModules = getAllowedModulesForRole(activeRole);
+  const allowedModules = navigationConfig && getResolvedAllowedModules(activeRole, navigationConfig).length > 0
+    ? getResolvedAllowedModules(activeRole, navigationConfig)
+        .map((moduleKey) => {
+          const backendModule = navigationConfig.modules.find((module) => module.key === moduleKey);
+          const fallbackModule = MODULE_META[moduleKey];
+
+          return {
+            ...fallbackModule,
+            label: backendModule?.label ?? fallbackModule.label,
+            description: backendModule?.description ?? fallbackModule.description,
+            quickAction: backendModule?.quickAction ?? fallbackModule.quickAction,
+            viewFormats: backendModule?.viewFormats ?? fallbackModule.viewFormats,
+          };
+        })
+    : getAllowedModulesForRole(activeRole);
   const activeModule = allowedModules.find((item) => item.id === selectedModule) ?? allowedModules[0];
   const availableViewFormats = activeModule?.viewFormats ?? ['table'];
   const searchPlaceholder = activeModule?.searchPlaceholder ?? roleWorkspace.subtitle;

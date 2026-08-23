@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Columns,
   ClipboardList,
@@ -20,6 +21,7 @@ import { useIOMS } from '../context/IOMSContext';
 import { useAuth } from '../context/AuthContext';
 import { AppModule } from '../types';
 import { getNavigationSectionsForRole, getRoleWorkspace } from '../config/roleWorkspace';
+import { getRoutePathForModule, isImplementedAppModule, resolveModuleRouteTarget } from '../routing/moduleRoutes';
 
 interface SidebarNavProps {
   onOpenTechSpecs: () => void;
@@ -40,6 +42,8 @@ const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>
   admin_users: Users,
   admin_roles: UserCog,
   admin_master: Database,
+  admin_modules: Database,
+  admin_module_roles: Columns,
   admin_mappings: Wifi,
   admin_audit: ScrollText,
 };
@@ -52,12 +56,37 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     currentUser,
     activeRole,
     selectedModule,
-    setSelectedModule,
+    navigationConfig,
   } = useIOMS();
   const { logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const navigationSections = getNavigationSectionsForRole(activeRole);
+  const navigationSections = navigationConfig && navigationConfig.heads.length > 0
+    ? navigationConfig.heads
+        .sort((left, right) => left.order - right.order)
+        .map((head) => ({
+          id: head.key,
+          label: head.label,
+          searchLabel: head.label,
+          order: head.order,
+          modules: navigationConfig.modules
+            .filter((module) =>
+              module.navigationHeadKey === head.key &&
+              navigationConfig.allowedModuleKeys.includes(module.key) &&
+              isImplementedAppModule(module.key),
+            )
+            .sort((left, right) => left.order - right.order)
+            .map((module) => ({
+              id: module.key as AppModule,
+              label: module.label,
+              description: module.description,
+              routeTarget: resolveModuleRouteTarget(module.routeTarget, module.key),
+            })),
+        }))
+        .filter((head) => head.modules.length > 0)
+    : getNavigationSectionsForRole(activeRole);
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-200 bg-white text-slate-700 z-30 select-none">
@@ -95,13 +124,15 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </div>
             <div className="space-y-1">
               {section.modules.map((item) => {
-                const Icon = moduleIcons[item.id];
-                const isActive = selectedModule === item.id;
+                const moduleId = item.id as AppModule;
+                const Icon = moduleIcons[moduleId];
+                const routeTarget = 'routeTarget' in item ? item.routeTarget : getRoutePathForModule(moduleId);
+                const isActive = location.pathname === routeTarget || selectedModule === moduleId;
 
                 return (
                   <button
-                    key={item.id}
-                    onClick={() => setSelectedModule(item.id)}
+                    key={moduleId}
+                    onClick={() => navigate(routeTarget)}
                     className={`w-full rounded-2xl px-3 py-3 text-left transition ${
                       isActive
                         ? 'bg-emerald-50 text-emerald-700'

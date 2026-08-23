@@ -1,33 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
+  ArrowRight,
+  ClipboardList,
+  Database,
+  KeyRound,
+  Layers3,
+  Network,
+  Plus,
+  RefreshCw,
+  Save,
+  Server,
   ShieldCheck,
   Users,
-  KeyRound,
-  Network,
-  RefreshCw,
-  Plus,
-  Save,
-  Database,
-  Activity,
-  CircleOff,
   Wifi,
-  History,
-  Server,
-  Search,
-  ArrowRight,
-  FolderKanban,
-  Layers3,
-  Boxes,
-  ClipboardList,
 } from 'lucide-react';
 import {
   AdminAuditItem,
+  AdminModule,
   AdminOverview,
   AdminUser,
-  MasterDataGroup,
-  SystemSession,
-  NetworkODP,
   AppModule,
+  MasterDataGroup,
+  NavigationHead,
+  RoleMeta,
+  RoleModuleMapping,
+  SystemSession,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useIOMS } from '../../context/IOMSContext';
@@ -43,24 +41,15 @@ type AdminMappingPayload = {
     usedPorts: number;
     availablePorts: number;
   };
-  odps: NetworkODP[];
+  odps: Array<{
+    id: string;
+    region: string;
+    oltHost: string;
+    ponSlot: string;
+    usedPorts: number;
+    totalPorts: number;
+  }>;
   roleDivisionMap: Array<Record<string, string | number | boolean | null>>;
-};
-
-type OverviewListItem = {
-  id: string;
-  label: string;
-  subtitle: string;
-  count: number;
-  targetModule: AppModule;
-};
-
-type OverviewCardItem = {
-  id: string;
-  title: string;
-  count: number;
-  icon: React.ComponentType<{ className?: string }>;
-  targetModule: AppModule;
 };
 
 const emptyOverview: AdminOverview = {
@@ -80,95 +69,193 @@ const emptyOverview: AdminOverview = {
 const moduleTitles: Record<string, { title: string; description: string }> = {
   dashboard: {
     title: 'System Administration Overview',
-    description: 'Kontrol utama untuk akun login, referensi master data, mapping aplikasi, dan audit sistem web.',
+    description: 'Kontrol utama untuk akun login, master data, modul navigasi, mapping role, dan audit sistem web.',
   },
   admin_users: {
     title: 'Manajemen Akun Login',
-    description: 'Kelola akun, role, division, status aktif, reset password, dan visibilitas session user.',
+    description: 'Kelola akun login, status aktif, reset password, dan metadata user aplikasi.',
   },
   admin_roles: {
-    title: 'Role & Hak Akses',
-    description: 'Tinjau pemetaan role dan division yang dipakai aplikasi sebagai dasar kontrol akses.',
+    title: 'Master Data Role',
+    description: 'Lihat role system yang ada dan ubah metadata role seperti role title dan division.',
   },
   admin_master: {
     title: 'Master Data Referensi',
-    description: 'Kelola region, paket layanan, referensi inventaris, dan referensi workflow lintas modul.',
+    description: 'Kelola referensi wilayah, paket layanan, inventory, dan workflow aplikasi.',
+  },
+  admin_modules: {
+    title: 'Master Data Modul',
+    description: 'Kelola kepala navigasi, nama modul, deskripsi modul, urutan, dan link akses internal.',
+  },
+  admin_module_roles: {
+    title: 'Modul To Role',
+    description: 'Tentukan modul apa saja yang tampil pada navigasi untuk setiap role system.',
   },
   admin_mappings: {
     title: 'Mapping Infrastruktur',
-    description: 'Pantau summary ODP, kapasitas port, dan relasi mapping role/division aplikasi.',
+    description: 'Pantau summary ODP, kapasitas port, dan relasi data infrastruktur aplikasi.',
   },
   admin_audit: {
     title: 'Audit & Session',
-    description: 'Lihat jejak aktivitas superadmin, auth event, perubahan master data, dan status user online.',
+    description: 'Lihat jejak aktivitas admin dan status user online dalam sistem.',
   },
 };
 
-const roleOptions = [
-  { value: 'superadmin', label: 'Super Administrator', division: 'IT & System Development' },
-  { value: 'management', label: 'Direktur Operasional & Bisnis', division: 'Executive Management' },
-  { value: 'sales', label: 'Sales Fiber Consultant', division: 'Sales & Acquisition' },
-  { value: 'noc', label: 'Senior Network Engineer', division: 'Network Operation Center' },
-  { value: 'helpdesk', label: 'Customer Care & Helpdesk', division: 'Customer Service & Helpdesk' },
-  { value: 'lead_tech', label: 'Kepala Teknisi Lapangan', division: 'Field Operations & Dispatch' },
-  { value: 'field_tech', label: 'Teknisi Instalasi & FO', division: 'Field Operations' },
-  { value: 'finance', label: 'Finance & Billing Specialist', division: 'Finance, Billing & Accounting' },
-  { value: 'inventory', label: 'Logistik & Asset Inventory', division: 'Warehouse & Asset Logistics' },
-];
+const defaultUserForm = {
+  name: '',
+  email: '',
+  role: 'inventory',
+  phone: '',
+  password: '',
+  passwordConfirmation: '',
+  isActive: true,
+};
+
+const defaultRoleForm: RoleMeta = {
+  role: '',
+  roleTitle: '',
+  division: '',
+  description: '',
+  isActive: true,
+  sortOrder: 0,
+};
+
+const defaultModuleForm = {
+  key: '',
+  label: '',
+  description: '',
+  navigationHeadKey: '',
+  order: 0,
+  routeTarget: '',
+  quickAction: null as AdminModule['quickAction'],
+  viewFormats: [] as Array<'table' | 'grid' | 'kanban' | 'map'>,
+  isActive: true,
+  showInNavbar: true,
+  adminOnlyDashboard: false,
+};
+
+const defaultModuleFormErrors = {
+  key: '',
+  label: '',
+  navigationHeadKey: '',
+  routeTarget: '',
+};
+
+const createBlankHead = (order: number): NavigationHead => ({
+  key: '',
+  label: '',
+  order,
+  isActive: true,
+});
+
+const HEAD_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = ({ selectedModule }) => {
   const { authFetch } = useAuth();
   const { setSelectedModule } = useIOMS();
+
   const [overview, setOverview] = useState<AdminOverview>(emptyOverview);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [roles, setRoles] = useState<RoleMeta[]>([]);
   const [masterGroups, setMasterGroups] = useState<MasterDataGroup[]>([]);
   const [sessions, setSessions] = useState<SystemSession[]>([]);
   const [mappingPayload, setMappingPayload] = useState<AdminMappingPayload | null>(null);
+  const [navigationHeads, setNavigationHeads] = useState<NavigationHead[]>([]);
+  const [adminModules, setAdminModules] = useState<AdminModule[]>([]);
+  const [roleModuleMappings, setRoleModuleMappings] = useState<RoleModuleMapping[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroupKey, setSelectedGroupKey] = useState('regions');
   const [draftGroups, setDraftGroups] = useState<Record<string, Array<Record<string, string | number | boolean | null>>>>({});
+  const [roleDrafts, setRoleDrafts] = useState<Record<string, RoleMeta>>({});
+  const [moduleDrafts, setModuleDrafts] = useState<Record<string, AdminModule>>({});
+  const [headDrafts, setHeadDrafts] = useState<Record<string, NavigationHead>>({});
+  const [selectedMappingRole, setSelectedMappingRole] = useState<RoleMeta['role']>('helpdesk');
+  const [mappingDrafts, setMappingDrafts] = useState<Record<string, RoleModuleMapping[]>>({});
+
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
-  const [userForm, setUserForm] = useState({
-    name: '',
-    email: '',
-    role: 'inventory',
-    roleTitle: 'Logistik & Asset Inventory',
-    division: 'Warehouse & Asset Logistics',
-    phone: '',
-    password: '',
-    passwordConfirmation: '',
-    isActive: true,
-  });
+  const [userForm, setUserForm] = useState(defaultUserForm);
+  const [isRoleFormOpen, setIsRoleFormOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<RoleMeta | null>(null);
+  const [roleForm, setRoleForm] = useState<RoleMeta>(defaultRoleForm);
   const [passwordTarget, setPasswordTarget] = useState<AdminUser | null>(null);
   const [passwordForm, setPasswordForm] = useState({ password: '', passwordConfirmation: '' });
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [isModuleFormOpen, setIsModuleFormOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState<AdminModule | null>(null);
+  const [moduleForm, setModuleForm] = useState(defaultModuleForm);
+  const [moduleFormErrors, setModuleFormErrors] = useState(defaultModuleFormErrors);
 
   const loadAdminData = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const [overviewPayload, usersPayload, masterPayload, mappingResponse, sessionsPayload] = await Promise.all([
+      const [
+        overviewPayload,
+        usersPayload,
+        rolesPayload,
+        masterPayload,
+        modulesPayload,
+        mappingsPayload,
+        navigationConfigPayload,
+        infraMappingsPayload,
+        sessionsPayload,
+      ] = await Promise.all([
         authFetch<{ data: AdminOverview }>('/admin/overview'),
         authFetch<{ data: AdminUser[] }>('/admin/users'),
+        authFetch<{ data: RoleMeta[] }>('/admin/roles'),
         authFetch<{ data: MasterDataGroup[] }>('/admin/master-data'),
+        authFetch<{ data: { heads: NavigationHead[]; modules: AdminModule[] } }>('/admin/modules'),
+        authFetch<{ data: { roles: RoleMeta[]; heads: NavigationHead[]; modules: AdminModule[]; mappings: RoleModuleMapping[] } }>('/admin/module-role-mappings'),
+        authFetch<{ data: { heads: NavigationHead[]; modules: AdminModule[]; roleMappings: RoleModuleMapping[] } }>('/admin/navigation-config'),
         authFetch<{ data: AdminMappingPayload }>('/admin/mappings'),
         authFetch<{ data: SystemSession[] }>('/admin/sessions'),
       ]);
 
       setOverview(overviewPayload.data);
       setUsers(usersPayload.data);
-      setMasterGroups(masterPayload.data);
-      setMappingPayload(mappingResponse.data);
+      setRoles(rolesPayload.data);
+      setMasterGroups(masterPayload.data.filter((group) => group.key !== 'role_division_map'));
+      setNavigationHeads(modulesPayload.data.heads);
+      setAdminModules(modulesPayload.data.modules);
+      setRoleModuleMappings(mappingsPayload.data.mappings);
+      setMappingPayload(infraMappingsPayload.data);
       setSessions(sessionsPayload.data);
+
+      setRoleDrafts(
+        Object.fromEntries(rolesPayload.data.map((role) => [role.role, { ...role }]))
+      );
       setDraftGroups(
         Object.fromEntries(masterPayload.data.map((group) => [group.key, group.items.map((item) => ({ ...item }))]))
       );
+      setHeadDrafts(
+        Object.fromEntries(modulesPayload.data.heads.map((head) => [head.key, { ...head }]))
+      );
+      setModuleDrafts(
+        Object.fromEntries(modulesPayload.data.modules.map((module) => [module.key, { ...module }]))
+      );
+
+      const mappingsByRole = rolesPayload.data.reduce<Record<string, RoleModuleMapping[]>>((accumulator, role) => {
+        accumulator[role.role] = mappingsPayload.data.mappings
+          .filter((mapping) => mapping.role === role.role)
+          .map((mapping) => ({ ...mapping }));
+        return accumulator;
+      }, {});
+      setMappingDrafts(mappingsByRole);
+      if (!rolesPayload.data.some((role) => role.role === selectedMappingRole)) {
+        const nextRole = rolesPayload.data.find((role) => role.role !== 'superadmin')?.role ?? rolesPayload.data[0]?.role ?? 'helpdesk';
+        setSelectedMappingRole(nextRole);
+      }
+
+      const nextNavigationHeads = navigationConfigPayload.data.heads;
+      if (nextNavigationHeads.length > 0 && !nextNavigationHeads.some((head) => head.key === selectedGroupKey)) {
+        setSelectedGroupKey(masterPayload.data[0]?.key ?? 'regions');
+      }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat dashboard superadmin.');
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat workspace superadmin.');
     } finally {
       setIsLoading(false);
     }
@@ -195,124 +282,40 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   const currentGroup = masterGroups.find((group) => group.key === selectedGroupKey) ?? null;
   const currentGroupDraft = currentGroup ? draftGroups[currentGroup.key] ?? [] : [];
+  const headDraftEntries = Object.entries(headDrafts) as Array<[string, NavigationHead]>;
+  const currentHeadDrafts = Object.values(headDrafts) as NavigationHead[];
+  const normalizedHeadDrafts = currentHeadDrafts
+    .map((head) => ({
+      key: head.key.trim(),
+      label: head.label.trim(),
+      order: Number.isFinite(head.order) ? head.order : 0,
+      isActive: head.isActive,
+    }))
+    .filter((head) => head.key !== '' || head.label !== '');
+  const hasInvalidHeadDraft = normalizedHeadDrafts.some((head) => head.key === '' || head.label === '');
+  const canSaveNavigationHeads = normalizedHeadDrafts.length > 0 && !hasInvalidHeadDraft;
+  const availableNavigationHeads = navigationHeads.filter((head) => head.key.trim() !== '');
 
-  const sessionSummary = useMemo(
-    () => ({
-      online: sessions.filter((session) => session.isOnline).length,
-      inactive: sessions.filter((session) => !session.isActive).length,
-    }),
-    [sessions]
-  );
+  const selectedRoleMappingDraft = mappingDrafts[selectedMappingRole] ?? [];
+  const activeRoles = roles.filter((role) => role.isActive);
+  const nonSuperadminRoles = roles.filter((role) => role.role !== 'superadmin');
+  const selectedUserRoleMeta = roles.find((role) => role.role === userForm.role) ?? null;
+  const availableUserRoles = selectedUserRoleMeta && !activeRoles.some((role) => role.role === selectedUserRoleMeta.role)
+    ? [selectedUserRoleMeta, ...activeRoles]
+    : activeRoles;
 
-  const overviewListItems = useMemo<OverviewListItem[]>(() => {
-    const mappingCount = mappingPayload?.roleDivisionMap.length ?? 0;
-
-    const masterGroupItems = [...masterGroups]
-      .sort((left, right) => right.items.length - left.items.length)
-      .slice(0, 4)
-      .map((group) => ({
-        id: group.key,
-        label: group.label,
-        subtitle: `${group.key} reference`,
-        count: group.items.length,
-        targetModule: 'admin_master' as AppModule,
-      }));
-
-    return [
-      ...masterGroupItems,
-      {
-        id: 'account-admin',
-        label: 'Manajemen Akun',
-        subtitle: 'login_user_admin',
-        count: users.length,
-        targetModule: 'admin_users',
-      },
-      {
-        id: 'role-admin',
-        label: 'Role & Hak Akses',
-        subtitle: 'role_division_map',
-        count: mappingCount,
-        targetModule: 'admin_roles',
-      },
-      {
-        id: 'audit-session',
-        label: 'Audit & Session',
-        subtitle: 'system_activity_log',
-        count: Math.max(overview.auditCount, sessions.length),
-        targetModule: 'admin_audit',
-      },
-    ].slice(0, 6);
-  }, [mappingPayload, masterGroups, overview.auditCount, sessions.length, users.length]);
-
-  const overviewCardItems = useMemo<OverviewCardItem[]>(() => ([
-    {
-      id: 'regions-mapping',
-      title: 'Region & Cluster',
-      count: overview.regionCount,
-      icon: FolderKanban,
-      targetModule: 'admin_master',
-    },
-    {
-      id: 'package-mapping',
-      title: 'Paket Layanan',
-      count: overview.servicePackageCount,
-      icon: Boxes,
-      targetModule: 'admin_master',
-    },
-    {
-      id: 'role-mapping',
-      title: 'Role To Division',
-      count: mappingPayload?.roleDivisionMap.length ?? 0,
-      icon: Layers3,
-      targetModule: 'admin_roles',
-    },
-    {
-      id: 'odp-mapping',
-      title: 'ODP & Port Binding',
-      count: mappingPayload?.networkSummary.totalOdps ?? 0,
-      icon: Network,
-      targetModule: 'admin_mappings',
-    },
-    {
-      id: 'account-mapping',
-      title: 'Loginuser To Modul',
-      count: users.length,
-      icon: Users,
-      targetModule: 'admin_users',
-    },
-    {
-      id: 'audit-review',
-      title: 'Audit & Session',
-      count: overview.auditCount,
-      icon: ClipboardList,
-      targetModule: 'admin_audit',
-    },
-  ]), [mappingPayload, overview.auditCount, overview.regionCount, overview.servicePackageCount, users.length]);
-
-  const filteredOverviewList = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return overviewListItems;
-    }
-
-    return overviewListItems.filter((item) => {
-      const haystack = `${item.label} ${item.subtitle}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [overviewListItems, searchQuery]);
+  const overviewCards = [
+    { label: 'Total User', value: overview.totalUsers, target: 'admin_users' as AppModule, icon: Users },
+    { label: 'Role System', value: roles.length, target: 'admin_roles' as AppModule, icon: ShieldCheck },
+    { label: 'Modul Navigasi', value: adminModules.length, target: 'admin_modules' as AppModule, icon: Database },
+    { label: 'Mapping Role', value: roleModuleMappings.length, target: 'admin_module_roles' as AppModule, icon: Layers3 },
+  ];
 
   const resetUserForm = () => {
     setEditingUser(null);
     setUserForm({
-      name: '',
-      email: '',
-      role: 'inventory',
-      roleTitle: 'Logistik & Asset Inventory',
-      division: 'Warehouse & Asset Logistics',
-      phone: '',
-      password: '',
-      passwordConfirmation: '',
-      isActive: true,
+      ...defaultUserForm,
+      role: activeRoles[0]?.role ?? defaultUserForm.role,
     });
   };
 
@@ -327,9 +330,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       name: user.name,
       email: user.email,
       role: user.role,
-      roleTitle: user.roleTitle,
-      division: user.division,
-      phone: user.phone ?? '',
+      phone: user.phone,
       password: '',
       passwordConfirmation: '',
       isActive: user.isActive,
@@ -337,35 +338,23 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     setIsUserFormOpen(true);
   };
 
-  const handleRoleChange = (role: string) => {
-    const selected = roleOptions.find((option) => option.value === role);
-    setUserForm((state) => ({
-      ...state,
-      role,
-      roleTitle: selected?.label ?? state.roleTitle,
-      division: selected?.division ?? state.division,
-    }));
-  };
-
   const saveUser = async () => {
     setFeedback(null);
-    const payload = {
-      name: userForm.name,
-      email: userForm.email,
-      role: userForm.role,
-      role_title: userForm.roleTitle,
-      division: userForm.division,
-      phone: userForm.phone,
-      is_active: userForm.isActive,
-      ...(editingUser
-        ? {}
-        : {
-            password: userForm.password,
-            password_confirmation: userForm.passwordConfirmation,
-          }),
-    };
-
     try {
+      const payload = {
+        name: userForm.name,
+        email: userForm.email,
+        role: userForm.role,
+        phone: userForm.phone,
+        is_active: userForm.isActive,
+        ...(editingUser
+          ? {}
+          : {
+              password: userForm.password,
+              password_confirmation: userForm.passwordConfirmation,
+            }),
+      };
+
       if (editingUser) {
         await authFetch(`/admin/users/${editingUser.id}`, {
           method: 'PUT',
@@ -378,9 +367,9 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         });
       }
 
+      setFeedback(editingUser ? 'Profil akun berhasil diperbarui.' : 'Akun login baru berhasil dibuat.');
       setIsUserFormOpen(false);
       resetUserForm();
-      setFeedback(editingUser ? 'Profil akun berhasil diperbarui.' : 'Akun baru berhasil dibuat.');
       await loadAdminData();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Gagal menyimpan akun.');
@@ -388,7 +377,6 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   };
 
   const toggleUserStatus = async (user: AdminUser) => {
-    setFeedback(null);
     try {
       await authFetch(`/admin/users/${user.id}/status`, {
         method: 'PATCH',
@@ -404,7 +392,6 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const resetUserPassword = async () => {
     if (!passwordTarget) return;
 
-    setFeedback(null);
     try {
       await authFetch(`/admin/users/${passwordTarget.id}/reset-password`, {
         method: 'POST',
@@ -413,38 +400,127 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           password_confirmation: passwordForm.passwordConfirmation,
         }),
       });
+      setFeedback(`Password akun ${passwordTarget.name} berhasil direset.`);
       setPasswordTarget(null);
       setPasswordForm({ password: '', passwordConfirmation: '' });
-      setFeedback(`Password akun ${passwordTarget.name} berhasil direset.`);
-      await loadAdminData();
     } catch (passwordError) {
       setError(passwordError instanceof Error ? passwordError.message : 'Gagal mereset password akun.');
     }
   };
 
+  const openCreateRole = () => {
+    setEditingRole(null);
+    setRoleForm({
+      ...defaultRoleForm,
+      sortOrder: roles.length + 1,
+    });
+    setIsRoleFormOpen(true);
+  };
+
+  const openEditRole = (role: RoleMeta) => {
+    setEditingRole(role);
+    setRoleForm({
+      role: role.role,
+      roleTitle: role.roleTitle,
+      division: role.division,
+      description: role.description ?? '',
+      isActive: role.isActive,
+      sortOrder: role.sortOrder ?? 0,
+    });
+    setIsRoleFormOpen(true);
+  };
+
+  const saveRole = async () => {
+    try {
+      const payload = {
+        role: roleForm.role,
+        role_title: roleForm.roleTitle,
+        division: roleForm.division,
+        description: roleForm.description ?? '',
+        sort_order: roleForm.sortOrder ?? 0,
+        is_active: roleForm.isActive,
+      };
+
+      if (editingRole) {
+        await authFetch(`/admin/roles/${editingRole.role}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await authFetch('/admin/roles', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      }
+
+      setFeedback(editingRole ? `Role ${editingRole.role} berhasil diperbarui.` : `Role ${roleForm.role} berhasil dibuat.`);
+      setIsRoleFormOpen(false);
+      setEditingRole(null);
+      setRoleForm(defaultRoleForm);
+      await loadAdminData();
+    } catch (roleError) {
+      setError(roleError instanceof Error ? roleError.message : 'Gagal menyimpan role.');
+    }
+  };
+
+  const saveRoleMeta = async (role: RoleMeta['role']) => {
+    const draft = roleDrafts[role];
+    if (!draft) return;
+
+    try {
+      await authFetch(`/admin/roles/${role}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          role_title: draft.roleTitle,
+          division: draft.division,
+          description: draft.description ?? '',
+          sort_order: draft.sortOrder ?? 0,
+          is_active: draft.isActive,
+        }),
+      });
+      setFeedback(`Metadata role ${role} berhasil diperbarui.`);
+      await loadAdminData();
+    } catch (roleError) {
+      setError(roleError instanceof Error ? roleError.message : 'Gagal memperbarui role.');
+    }
+  };
+
+  const toggleRoleStatus = async (role: RoleMeta) => {
+    try {
+      await authFetch(`/admin/roles/${role.role}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !role.isActive }),
+      });
+      setFeedback(`Status role ${role.role} berhasil diperbarui.`);
+      await loadAdminData();
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : 'Gagal memperbarui status role.');
+    }
+  };
+
   const updateGroupField = (rowIndex: number, field: string, value: string) => {
     if (!currentGroup) return;
+
     setDraftGroups((state) => ({
       ...state,
-      [currentGroup.key]: (state[currentGroup.key] ?? []).map((item, index) =>
-        index === rowIndex ? { ...item, [field]: value } : item
+      [currentGroup.key]: (state[currentGroup.key] ?? []).map((row, index) =>
+        index === rowIndex ? { ...row, [field]: value } : row
       ),
     }));
   };
 
   const addGroupRow = () => {
     if (!currentGroup) return;
-    const newItem = Object.fromEntries(currentGroup.editableFields.map((field) => [field, '']));
+    const nextRow = Object.fromEntries(currentGroup.editableFields.map((field) => [field, '']));
     setDraftGroups((state) => ({
       ...state,
-      [currentGroup.key]: [...(state[currentGroup.key] ?? []), newItem],
+      [currentGroup.key]: [...(state[currentGroup.key] ?? []), nextRow],
     }));
   };
 
   const saveCurrentGroup = async () => {
     if (!currentGroup) return;
 
-    setFeedback(null);
     try {
       await authFetch(`/admin/master-data/${currentGroup.key}`, {
         method: 'PUT',
@@ -460,202 +536,280 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     }
   };
 
+  const openCreateModule = () => {
+    setEditingModule(null);
+    setModuleForm(defaultModuleForm);
+    setModuleFormErrors(defaultModuleFormErrors);
+    setIsModuleFormOpen(true);
+  };
+
+  const openEditModule = (module: AdminModule) => {
+    setEditingModule(module);
+    setModuleForm({ ...module });
+    setModuleFormErrors(defaultModuleFormErrors);
+    setIsModuleFormOpen(true);
+  };
+
+  const validateModuleForm = () => {
+    const nextErrors = {
+      key: '',
+      label: '',
+      navigationHeadKey: '',
+      routeTarget: '',
+    };
+
+    if (!editingModule && !/^[a-z][a-z0-9_]*$/.test(moduleForm.key.trim())) {
+      nextErrors.key = 'Key modul wajib huruf kecil, angka, atau underscore, dan harus diawali huruf.';
+    }
+
+    if (!moduleForm.label.trim()) {
+      nextErrors.label = 'Label modul wajib diisi.';
+    }
+
+    if (!moduleForm.navigationHeadKey.trim()) {
+      nextErrors.navigationHeadKey = 'Kepala navigasi wajib dipilih.';
+    }
+
+    if (!/^\/app(?:\/[a-z0-9-]+)+$/.test(moduleForm.routeTarget.trim())) {
+      nextErrors.routeTarget = 'Route target harus berupa path internal, misalnya /app/helpdesk.';
+    }
+
+    setModuleFormErrors(nextErrors);
+    return Object.values(nextErrors).every((value) => value === '');
+  };
+
+  const normalizeModuleErrorMessage = (message: string) => {
+    if (message.includes('selected navigation head key is invalid') || message.includes('navigation head key')) {
+      return 'Kepala navigasi yang dipilih tidak valid. Simpan atau perbaiki data head navigasi terlebih dahulu.';
+    }
+
+    if (message.includes('module key')) {
+      return 'Key modul sudah dipakai. Gunakan key lain yang unik.';
+    }
+
+    if (message.includes('Route target sudah dipakai')) {
+      return 'Route target sudah dipakai modul lain.';
+    }
+
+    if (message.includes('Route target harus berupa path internal')) {
+      return 'Route target harus diawali /app/, misalnya /app/helpdesk.';
+    }
+
+    return message;
+  };
+
+  const saveModule = async () => {
+    setError(null);
+    setFeedback(null);
+
+    if (!validateModuleForm()) {
+      setError('Periksa kembali field modul yang masih belum valid.');
+      return;
+    }
+
+    if (availableNavigationHeads.length === 0) {
+      setError('Belum ada kepala navigasi yang valid. Tambahkan atau simpan kepala navigasi terlebih dahulu.');
+      return;
+    }
+
+    try {
+      const payload = {
+        key: moduleForm.key.trim(),
+        label: moduleForm.label.trim(),
+        description: moduleForm.description.trim(),
+        navigation_head_key: moduleForm.navigationHeadKey,
+        order: moduleForm.order,
+        route_target: moduleForm.routeTarget.trim(),
+        quick_action: moduleForm.quickAction,
+        view_formats: moduleForm.viewFormats,
+        is_active: moduleForm.isActive,
+        show_in_navbar: moduleForm.showInNavbar,
+        admin_only_dashboard: moduleForm.adminOnlyDashboard,
+      };
+
+      if (editingModule) {
+        await authFetch(`/admin/modules/${editingModule.key}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await authFetch('/admin/modules', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      }
+
+      setFeedback(editingModule ? 'Master modul berhasil diperbarui.' : 'Master modul baru berhasil dibuat.');
+      setIsModuleFormOpen(false);
+      setEditingModule(null);
+      setModuleForm(defaultModuleForm);
+      setModuleFormErrors(defaultModuleFormErrors);
+      await loadAdminData();
+    } catch (moduleError) {
+      setError(normalizeModuleErrorMessage(moduleError instanceof Error ? moduleError.message : 'Gagal menyimpan modul.'));
+    }
+  };
+
+  const saveNavigationHeads = async () => {
+    setError(null);
+    setFeedback(null);
+
+    if (normalizedHeadDrafts.length === 0) {
+      setError('Belum ada kepala navigasi. Tambahkan head terlebih dahulu.');
+      return;
+    }
+
+    if (hasInvalidHeadDraft) {
+      setError('Setiap kepala navigasi wajib memiliki key dan label sebelum disimpan.');
+      return;
+    }
+
+    const hasInvalidHeadKeyFormat = normalizedHeadDrafts.some((head) => !HEAD_KEY_PATTERN.test(head.key));
+    if (hasInvalidHeadKeyFormat) {
+      setError('Key kepala navigasi hanya boleh huruf kecil, angka, dan underscore, serta harus diawali huruf.');
+      return;
+    }
+
+    try {
+      await authFetch('/admin/navigation-config', {
+        method: 'PUT',
+        body: JSON.stringify({
+          heads: normalizedHeadDrafts.map((head) => ({
+            key: head.key,
+            label: head.label,
+            order: head.order,
+            is_active: head.isActive,
+          })),
+        }),
+      });
+      setFeedback('Kepala navigasi berhasil diperbarui.');
+      await loadAdminData();
+    } catch (headError) {
+      const message = headError instanceof Error ? headError.message : 'Gagal memperbarui kepala navigasi.';
+      setError(message.includes('heads field') ? 'Minimal harus ada satu kepala navigasi.' : message);
+    }
+  };
+
+  const addNavigationHeadDraft = () => {
+    const nextOrder = currentHeadDrafts.length > 0
+      ? Math.max(...currentHeadDrafts.map((head) => head.order || 0)) + 1
+      : 1;
+    const draftId = `draft_head_${Date.now()}`;
+    const nextHead = createBlankHead(nextOrder);
+
+    setHeadDrafts((state) => ({
+      ...state,
+      [draftId]: nextHead,
+    }));
+    setError(null);
+    setFeedback('Head baru ditambahkan. Lengkapi key dan label lalu simpan.');
+  };
+
+  const saveRoleModuleMappings = async () => {
+    try {
+      await authFetch(`/admin/module-role-mappings/${selectedMappingRole}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          mappings: selectedRoleMappingDraft.map((mapping) => ({
+            module_key: mapping.moduleKey,
+            is_visible: mapping.isVisible,
+            order_override: mapping.orderOverride ?? null,
+          })),
+        }),
+      });
+      setFeedback(`Mapping modul untuk role ${selectedMappingRole} berhasil diperbarui.`);
+      await loadAdminData();
+    } catch (mappingError) {
+      setError(mappingError instanceof Error ? mappingError.message : 'Gagal memperbarui mapping modul terhadap role.');
+    }
+  };
+
   const renderOverview = () => (
-    <div className="space-y-8">
-      <div className="grid gap-6 xl:grid-cols-[1.9fr_0.95fr]">
-        <div className="overflow-hidden rounded-[34px] border border-emerald-300/60 bg-linear-to-br from-emerald-400 via-emerald-500 to-emerald-600 p-6 text-white shadow-[0_22px_50px_rgba(16,185,129,0.25)] lg:p-8">
-          <div className="flex h-full flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-8">
-            <div className="flex items-start gap-4 lg:w-[28%]">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/25 ring-8 ring-white/10">
-                <ShieldCheck className="h-9 w-9" />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-50/90">System Administration</p>
-                <h2 className="text-2xl font-black tracking-tight">Master Data</h2>
-                <p className="max-w-sm text-sm text-emerald-50/85">
-                  Data master aplikasi, akun login, dan struktur referensi operasional dikelola penuh dari workspace ini.
-                </p>
-              </div>
-            </div>
-
-            <div className="hidden w-px bg-white/20 lg:block" />
-
-            <div className="grid flex-1 gap-5 md:grid-cols-2">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-xl font-black">Master Data</h3>
-                  <p className="mt-1 text-sm text-emerald-50/85">
-                    Kelola wilayah, paket layanan, referensi inventaris, dan workflow utama aplikasi.
-                  </p>
-                </div>
-                <div className="rounded-3xl bg-white/12 p-4 backdrop-blur-sm">
-                  <div className="flex items-end justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-emerald-50/70">Total Grup Referensi</p>
-                      <p className="mt-2 text-4xl font-black">{overview.masterDataGroupCount}</p>
-                    </div>
-                    <div className="text-right text-sm text-emerald-50/85">
-                      <p>{overview.regionCount} wilayah</p>
-                      <p>{overview.servicePackageCount} paket</p>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedModule('admin_master')}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-bold text-emerald-700 shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-50"
-                >
-                  Tambah Data Master
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-xl font-black">Mapping Data</h3>
-                  <p className="mt-1 text-sm text-emerald-50/85">
-                    Proses pencocokan role, ODP, port binding, dan relasi data antar modul sistem.
-                  </p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    onClick={() => setSelectedModule('admin_mappings')}
-                    className="rounded-3xl bg-white/12 p-4 text-left backdrop-blur-sm transition hover:bg-white/18"
-                  >
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-50/70">ODP Aktif</p>
-                    <p className="mt-2 text-3xl font-black">{mappingPayload?.networkSummary.totalOdps ?? 0}</p>
-                    <p className="mt-2 text-sm text-emerald-50/80">Mapping Infrastruktur</p>
-                  </button>
-                  <button
-                    onClick={() => setSelectedModule('admin_roles')}
-                    className="rounded-3xl bg-white/12 p-4 text-left backdrop-blur-sm transition hover:bg-white/18"
-                  >
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-50/70">Role Mapping</p>
-                    <p className="mt-2 text-3xl font-black">{mappingPayload?.roleDivisionMap.length ?? 0}</p>
-                    <p className="mt-2 text-sm text-emerald-50/80">Role & Hak Akses</p>
-                  </button>
-                </div>
-                <button
-                  onClick={() => void loadAdminData()}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh Data Admin
-                </button>
-              </div>
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[34px] border border-emerald-300/60 bg-linear-to-br from-emerald-400 via-emerald-500 to-emerald-600 p-6 text-white shadow-[0_22px_50px_rgba(16,185,129,0.25)] lg:p-8">
+        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-50/90">System Administration</p>
+            <h2 className="text-3xl font-black tracking-tight">Master role, modul, dan navigasi aplikasi</h2>
+            <p className="max-w-2xl text-sm text-emerald-50/85">
+              Workspace ini menjadi pusat kontrol akun login, master referensi, kepala navigasi, dan mapping modul terhadap setiap role system.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => setSelectedModule('admin_master')} className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-700">
+                Buka Master Data
+              </button>
+              <button onClick={() => setSelectedModule('admin_module_roles')} className="rounded-2xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white">
+                Buka Modul To Role
+              </button>
             </div>
           </div>
-        </div>
 
-        <div className="rounded-[34px] border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(15,23,42,0.08)] lg:p-5">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Cari Master Data..."
-              className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-16 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-            />
-            <button
-              type="button"
-              className="absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-sm"
-              aria-label="Cari data admin"
-            >
-              <Search className="h-4 w-4" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {overviewCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <button
+                  key={card.label}
+                  onClick={() => setSelectedModule(card.target)}
+                  className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left backdrop-blur-sm transition hover:bg-white/15"
+                >
+                  <Icon className="h-5 w-5 text-emerald-50" />
+                  <p className="mt-4 text-xs font-bold uppercase tracking-[0.16em] text-emerald-50/70">{card.label}</p>
+                  <p className="mt-1 text-3xl font-black">{card.value}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black text-slate-950">Akses cepat administrasi</h3>
+              <p className="text-sm text-slate-500">Shortcut untuk area admin yang paling sering dipakai superadmin.</p>
+            </div>
+            <button onClick={() => void loadAdminData()} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
             </button>
           </div>
-
-          <div className="mt-6 flex items-center justify-between">
-            <h3 className="text-2xl font-black text-slate-900">Data Master</h3>
-            <span className="rounded-full bg-rose-500 px-3 py-1 text-[11px] font-bold text-white">
-              {filteredOverviewList.length} Tabel
-            </span>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {[
+              { title: 'Master Data Role', subtitle: 'Role title dan division', target: 'admin_roles' as AppModule, count: roles.length, icon: ShieldCheck },
+              { title: 'Master Data Modul', subtitle: 'Nama modul dan link akses', target: 'admin_modules' as AppModule, count: adminModules.length, icon: Database },
+              { title: 'Modul To Role', subtitle: 'Visibilitas menu per role', target: 'admin_module_roles' as AppModule, count: roleModuleMappings.length, icon: Layers3 },
+              { title: 'Audit & Session', subtitle: 'Aktivitas admin dan user online', target: 'admin_audit' as AppModule, count: overview.auditCount, icon: ClipboardList },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.title} onClick={() => setSelectedModule(item.target)} className="rounded-[28px] border border-slate-200 bg-slate-50 p-5 text-left transition hover:bg-white">
+                  <Icon className="h-5 w-5 text-emerald-700" />
+                  <p className="mt-4 text-base font-black text-slate-950">{item.title}</p>
+                  <p className="mt-1 text-sm text-slate-500">{item.subtitle}</p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{item.count}</span>
+                    <ArrowRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          <div className="mt-4 max-h-[560px] space-y-4 overflow-y-auto pr-1">
-            {filteredOverviewList.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setSelectedModule(item.targetModule)}
-                className="flex w-full items-center gap-4 rounded-[26px] border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40"
-              >
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 ring-1 ring-amber-200">
-                  <Database className="h-7 w-7" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-bold text-slate-900">{item.label}</p>
-                  <p className="truncate text-sm text-slate-500">{item.subtitle}</p>
-                </div>
-                <span className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-white">
-                  {item.count}
-                </span>
-              </button>
+        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+          <h3 className="text-lg font-black text-slate-950">Audit trail terbaru</h3>
+          <div className="mt-5 space-y-3">
+            {overview.latestAuditLogs.map((item: AdminAuditItem) => (
+              <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-bold text-slate-900">{item.action}</p>
+                <p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.actorRole} · {item.timestamp}</p>
+                <p className="mt-2 text-xs text-slate-600">{item.details}</p>
+              </div>
             ))}
-
-            {filteredOverviewList.length === 0 && (
-              <div className="rounded-[26px] border border-dashed border-slate-200 bg-slate-50 px-5 py-12 text-center">
-                <p className="text-sm font-semibold text-slate-700">Data admin tidak ditemukan</p>
-                <p className="mt-1 text-xs text-slate-500">Coba kata kunci lain untuk mencari master data atau modul admin.</p>
-              </div>
-            )}
           </div>
         </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-black text-slate-900">Mapping Data Master</h3>
-          <p className="mt-1 text-sm text-slate-500">Launcher cepat ke area administrasi sistem yang paling sering digunakan superadmin.</p>
-        </div>
-        <span className="rounded-full bg-rose-500 px-3 py-1 text-[11px] font-bold text-white">
-          {overviewCardItems.length} Tabel
-        </span>
-      </div>
-
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {overviewCardItems.map((item) => {
-          const Icon = item.icon;
-
-          return (
-            <div
-              key={item.id}
-              className="rounded-[30px] border border-slate-200 bg-white p-6 text-center shadow-[0_14px_36px_rgba(15,23,42,0.06)]"
-            >
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-linear-to-br from-sky-100 via-white to-emerald-100 ring-1 ring-slate-200">
-                <Icon className="h-9 w-9 text-emerald-700" />
-              </div>
-              <p className="mt-5 text-lg font-bold text-slate-900">{item.title}</p>
-              <span className="mt-3 inline-flex rounded-full bg-violet-100 px-3 py-1 text-sm font-bold text-violet-700">
-                {item.count}
-              </span>
-              <button
-                onClick={() => setSelectedModule(item.targetModule)}
-                className="mx-auto mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-sky-500 px-6 text-sm font-bold text-white transition hover:bg-sky-600"
-              >
-                Lihat Data
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: 'Total Akun', value: overview.totalUsers, icon: Users, tone: 'text-sky-700 bg-sky-50 border-sky-100' },
-          { label: 'Akun Nonaktif', value: overview.inactiveUsers, icon: CircleOff, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
-          { label: 'User Online', value: overview.onlineUsers, icon: Wifi, tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
-          { label: 'Audit Tercatat', value: overview.auditCount, icon: History, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
-        ].map((item) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className={`inline-flex rounded-2xl border px-3 py-3 ${item.tone}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <p className="mt-4 text-sm font-semibold text-slate-500">{item.label}</p>
-              <p className="mt-1 text-3xl font-black text-slate-950">{item.value}</p>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -663,66 +817,303 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const renderUserManagement = () => (
     <div className="space-y-6">
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-950">Akun login internal</h3>
+            <h3 className="text-lg font-black text-slate-950">Daftar akun login</h3>
             <p className="text-sm text-slate-500">Kelola akun aktif, role, division, dan tindakan admin sensitif.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap gap-2">
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Cari nama, email, role, division..."
-              className="w-72 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              className="min-w-[280px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
             />
-            <button
-              onClick={openCreateUser}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white"
-            >
-              <Plus className="w-4 h-4" />
+            <button onClick={openCreateUser} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+              <Plus className="h-4 w-4" />
               Tambah Akun
             </button>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="grid grid-cols-[1.2fr_1.2fr_0.7fr_1fr_0.8fr_1fr] gap-3 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-          <span>User</span>
-          <span>Email</span>
-          <span>Role</span>
-          <span>Division</span>
-          <span>Status</span>
-          <span>Aksi</span>
+      <div className="space-y-3">
+        {filteredUsers.map((user) => (
+          <div key={user.id} className="grid gap-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:grid-cols-[1.2fr_1fr_1fr_0.9fr]">
+            <div>
+              <p className="text-sm font-bold text-slate-900">{user.name}</p>
+              <p className="text-xs text-slate-500">{user.email}</p>
+              <p className="mt-2 text-xs font-semibold text-emerald-700">{user.id}</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{user.role}</p>
+              <p className="text-xs text-slate-500">{user.roleTitle}</p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-700">{user.division}</p>
+              <p className="text-xs text-slate-500 mt-1">{user.phone}</p>
+            </div>
+            <div className="flex flex-wrap items-start gap-2 xl:justify-end">
+              <button onClick={() => openEditUser(user)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                Edit
+              </button>
+              <button onClick={() => setPasswordTarget(user)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                Reset Password
+              </button>
+              <button onClick={() => void toggleUserStatus(user)} className={`rounded-xl px-3 py-2 text-xs font-semibold ${user.isActive ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                {user.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderRoleMeta = () => (
+    <div className="space-y-6">
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-950">Master data role</h3>
+            <p className="text-sm text-slate-500">Role digunakan untuk akun login dan menjadi dasar mapping modul ke setiap role system.</p>
+          </div>
+          <button onClick={openCreateRole} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+            <Plus className="h-4 w-4" />
+            Tambah Role
+          </button>
         </div>
-        <div className="divide-y divide-slate-100">
-          {filteredUsers.map((user) => (
-            <div key={user.id} className="grid grid-cols-[1.2fr_1.2fr_0.7fr_1fr_0.8fr_1fr] gap-3 px-5 py-4 text-sm items-center">
-              <div>
-                <p className="font-bold text-slate-900">{user.name}</p>
-                <p className="text-xs text-slate-500">{user.id}</p>
+      </div>
+
+      <div className="space-y-3">
+        {roles.map((role) => {
+          const draft = roleDrafts[role.role] ?? role;
+          return (
+            <div key={role.role} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+              <div className="grid gap-4 xl:grid-cols-[0.8fr_1fr_1fr_1.1fr_auto] xl:items-end">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{role.role}</p>
+                  <p className="mt-2 text-sm text-slate-500">{role.isActive ? 'Role aktif' : 'Role nonaktif'}</p>
+                </div>
+                <input
+                  value={draft.roleTitle}
+                  onChange={(event) => setRoleDrafts((state) => ({ ...state, [role.role]: { ...draft, roleTitle: event.target.value } }))}
+                  placeholder="Role title"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+                />
+                <input
+                  value={draft.division}
+                  onChange={(event) => setRoleDrafts((state) => ({ ...state, [role.role]: { ...draft, division: event.target.value } }))}
+                  placeholder="Division"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+                />
+                <input
+                  value={draft.description ?? ''}
+                  onChange={(event) => setRoleDrafts((state) => ({ ...state, [role.role]: { ...draft, description: event.target.value } }))}
+                  placeholder="Deskripsi role"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+                />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button onClick={() => openEditRole(role)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                    Detail
+                  </button>
+                  <button onClick={() => void toggleRoleStatus(role)} className={`rounded-xl px-3 py-2 text-xs font-semibold ${role.isActive ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                    {role.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                  </button>
+                  <button onClick={() => void saveRoleMeta(role.role)} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+                    <Save className="h-4 w-4" />
+                    Simpan
+                  </button>
+                </div>
               </div>
-              <div className="text-slate-600">{user.email}</div>
-              <div>
-                <p className="font-semibold text-slate-800">{user.role}</p>
-                <p className="text-xs text-slate-500">{user.roleTitle}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderMasterData = () => (
+    <div className="grid gap-6 lg:grid-cols-[0.35fr_0.65fr]">
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <h3 className="text-lg font-black text-slate-950">Kelompok master data</h3>
+        <div className="mt-4 space-y-2">
+          {masterGroups.map((group) => (
+            <button
+              key={group.key}
+              onClick={() => setSelectedGroupKey(group.key)}
+              className={`w-full rounded-2xl border px-4 py-3 text-left text-sm ${selectedGroupKey === group.key ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'}`}
+            >
+              <p className="font-semibold">{group.label}</p>
+              <p className="mt-1 text-xs text-slate-500">{group.items.length} item referensi</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-950">{currentGroup?.label ?? 'Master Data'}</h3>
+            <p className="text-sm text-slate-500">Edit data referensi yang menjadi sumber dropdown dan referensi workflow.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addGroupRow} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Tambah Baris</button>
+            <button onClick={() => void saveCurrentGroup()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+              <Save className="h-4 w-4" />
+              Simpan
+            </button>
+          </div>
+        </div>
+        <div className="mt-5 space-y-3">
+          {currentGroupDraft.map((row, rowIndex) => (
+            <div key={`${currentGroup?.key ?? 'group'}-${rowIndex}`} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+              {currentGroup?.editableFields.map((field) => (
+                <label key={field} className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{field}</span>
+                  <input
+                    value={String(row[field] ?? '')}
+                    onChange={(event) => updateGroupField(rowIndex, field, event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderModuleMaster = () => (
+    <div className="space-y-6">
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-950">Kepala navigasi</h3>
+            <p className="text-sm text-slate-500">Struktur kepala navigasi yang akan membungkus modul-modul di navbar.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={addNavigationHeadDraft} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+              <Plus className="h-4 w-4" />
+              Tambah Head
+            </button>
+            <button
+              onClick={() => void saveNavigationHeads()}
+              disabled={!canSaveNavigationHeads}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              <Save className="h-4 w-4" />
+              Simpan Head
+            </button>
+          </div>
+        </div>
+
+        {currentHeadDrafts.length === 0 ? (
+          <div className="mt-5 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+            <p className="text-base font-bold text-slate-900">Belum ada kepala navigasi</p>
+            <p className="mt-2 text-sm text-slate-500">
+              Tambahkan minimal satu head navigasi agar modul bisa dikelompokkan dan disimpan dengan benar.
+            </p>
+            <button onClick={addNavigationHeadDraft} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+              <Plus className="h-4 w-4" />
+              Tambah Head Pertama
+            </button>
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {headDraftEntries.map(([draftKey, draft]) => (
+              <div key={draftKey} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                {(() => {
+                  const isNewHeadDraft = draftKey.startsWith('draft_head_');
+                  return (
+                    <>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
+                  {draft.key.trim() || 'head_baru'}
+                </p>
+                <input
+                  value={draft.key}
+                  onChange={(event) => {
+                    if (!isNewHeadDraft) return;
+                    setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, key: event.target.value } }));
+                  }}
+                  placeholder="Key head, contoh: operasional"
+                  readOnly={!isNewHeadDraft}
+                  className={`mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm ${!isNewHeadDraft ? 'cursor-not-allowed bg-slate-100 text-slate-500' : ''}`}
+                />
+                <input
+                  value={draft.label}
+                  onChange={(event) => setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, label: event.target.value } }))}
+                  placeholder="Label head"
+                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                />
+                <input
+                  type="number"
+                  value={draft.order}
+                  onChange={(event) => setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, order: Number(event.target.value) } }))}
+                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                />
+                <label className="mt-3 flex items-center gap-3 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={draft.isActive}
+                    onChange={(event) => setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, isActive: event.target.checked } }))}
+                  />
+                  Head aktif
+                </label>
+                {!isNewHeadDraft && (
+                  <p className="mt-2 text-xs text-slate-500">Key head existing bersifat kode internal dan tidak bisa diubah dari sini.</p>
+                )}
+                    </>
+                  );
+                })()}
               </div>
-              <div className="text-slate-600">{user.division}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-950">Daftar modul aplikasi</h3>
+            <p className="text-sm text-slate-500">Nama modul, target route internal, head navigasi, urutan, dan visibilitas modul.</p>
+          </div>
+          <button onClick={openCreateModule} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+            <Plus className="h-4 w-4" />
+            Tambah Modul
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {adminModules.map((module) => (
+            <div key={module.key} className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 xl:grid-cols-[1fr_0.9fr_0.7fr_auto]">
               <div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${user.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                  {user.isActive ? 'Aktif' : 'Nonaktif'}
-                </span>
-                <p className="mt-1 text-xs text-slate-500">{user.isOnline ? 'Online' : 'Offline'}</p>
+                <p className="text-sm font-bold text-slate-900">{module.label}</p>
+                <p className="mt-1 text-xs text-slate-500">{module.description}</p>
+                <p className="mt-2 text-xs font-semibold text-emerald-700">{module.key} {'->'} {module.routeTarget}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${module.showInNavbar ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                    {module.showInNavbar ? 'Tampil di Navbar' : 'Dashboard Only'}
+                  </span>
+                  {module.adminOnlyDashboard && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                      Admin Tool
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => openEditUser(user)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
-                  Edit
-                </button>
-                <button onClick={() => setPasswordTarget(user)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-                  Reset Password
-                </button>
-                <button onClick={() => void toggleUserStatus(user)} className={`rounded-xl px-3 py-2 text-xs font-semibold ${user.isActive ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
-                  {user.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Navigation Head</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{module.navigationHeadKey}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Order</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{module.order}</p>
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => openEditModule(module)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                  Edit Modul
                 </button>
               </div>
             </div>
@@ -732,103 +1123,102 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     </div>
   );
 
-  const renderRoleMapping = () => {
-    const roleGroup = masterGroups.find((group) => group.key === 'role_division_map');
-    const rows = draftGroups.role_division_map ?? roleGroup?.items ?? [];
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <div>
-            <h3 className="text-lg font-black text-slate-950">Role policy & division mapping</h3>
-            <p className="text-sm text-slate-500">Fondasi role system yang dipakai frontend dan backend untuk kontrol akses.</p>
-          </div>
-          <button onClick={() => setSelectedGroupKey('role_division_map')} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
-            Sinkronkan ke Master Data
-          </button>
-        </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          {rows.map((row, index) => (
-            <div key={`${row.role ?? 'role'}-${index}`} className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">{String(row.role ?? '').replace('_', ' ')}</p>
-              <input
-                value={String(row.roleTitle ?? '')}
-                onChange={(event) => updateGroupField(index, 'roleTitle', event.target.value)}
-                className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold"
-              />
-              <input
-                value={String(row.division ?? '')}
-                onChange={(event) => updateGroupField(index, 'division', event.target.value)}
-                className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
-              />
-            </div>
-          ))}
-        </div>
-        <button onClick={() => void saveCurrentGroup()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-          <Save className="w-4 h-4" />
-          Simpan Role Mapping
-        </button>
-      </div>
-    );
-  };
-
-  const renderMasterData = () => (
+  const renderModuleToRole = () => (
     <div className="space-y-6">
-      <div className="grid lg:grid-cols-[0.35fr_0.65fr] gap-6">
-        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <h3 className="text-lg font-black text-slate-950">Kelompok master data</h3>
-          <div className="mt-4 space-y-2">
-            {masterGroups.map((group) => (
-              <button
-                key={group.key}
-                onClick={() => setSelectedGroupKey(group.key)}
-                className={`w-full rounded-2xl border px-4 py-3 text-left text-sm ${selectedGroupKey === group.key ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'}`}
-              >
-                <p className="font-semibold">{group.label}</p>
-                <p className="text-xs text-slate-500 mt-1">{group.items.length} item referensi</p>
-              </button>
-            ))}
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-950">Mapping modul terhadap role</h3>
+            <p className="text-sm text-slate-500">Pilih role, lalu atur menu apa saja yang tampil di bawah kepala navigasi untuk role tersebut.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedMappingRole}
+              onChange={(event) => setSelectedMappingRole(event.target.value as RoleMeta['role'])}
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+            >
+              {nonSuperadminRoles.map((role) => (
+                <option key={role.role} value={role.role}>{role.role}</option>
+              ))}
+            </select>
+            <button onClick={() => void saveRoleModuleMappings()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+              <Save className="h-4 w-4" />
+              Simpan Mapping
+            </button>
           </div>
         </div>
+      </div>
 
-        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-black text-slate-950">{currentGroup?.label ?? 'Master Data'}</h3>
-              <p className="text-sm text-slate-500">Edit data referensi yang menjadi sumber dropdown dan mapping aplikasi.</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={addGroupRow} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Tambah Baris</button>
-              <button onClick={() => void saveCurrentGroup()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-                <Save className="w-4 h-4" />
-                Simpan
-              </button>
-            </div>
-          </div>
-          <div className="mt-5 space-y-3">
-            {currentGroupDraft.map((row, rowIndex) => (
-              <div key={`${currentGroup?.key ?? 'group'}-${rowIndex}`} className="grid md:grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                {currentGroup?.editableFields.map((field) => (
-                  <label key={field} className="block">
-                    <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{field}</span>
-                    <input
-                      value={String(row[field] ?? '')}
-                      onChange={(event) => updateGroupField(rowIndex, field, event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                    />
-                  </label>
-                ))}
+      <div className="space-y-5">
+        {navigationHeads
+          .slice()
+          .sort((left, right) => left.order - right.order)
+          .map((head) => {
+            const modulesUnderHead = adminModules
+              .filter((module) => module.navigationHeadKey === head.key && module.showInNavbar)
+              .sort((left, right) => left.order - right.order);
+
+            return (
+              <div key={head.key} className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{head.key}</p>
+                    <h4 className="mt-1 text-lg font-black text-slate-950">{head.label}</h4>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                    {modulesUnderHead.length} modul
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {modulesUnderHead.map((module) => {
+                    const existing = selectedRoleMappingDraft.find((mapping) => mapping.moduleKey === module.key);
+                    const checked = existing?.isVisible ?? false;
+
+                    return (
+                      <label key={module.key} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{module.label}</p>
+                          <p className="mt-1 text-xs text-slate-500">{module.description}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => {
+                            const nextVisible = event.target.checked;
+                            setMappingDrafts((state) => {
+                              const current = state[selectedMappingRole] ?? [];
+                              const withoutCurrent = current.filter((mapping) => mapping.moduleKey !== module.key);
+                              return {
+                                ...state,
+                                [selectedMappingRole]: [
+                                  ...withoutCurrent,
+                                  {
+                                    role: selectedMappingRole,
+                                    moduleKey: module.key,
+                                    isVisible: nextVisible,
+                                    orderOverride: existing?.orderOverride ?? module.order,
+                                  },
+                                ],
+                              };
+                            });
+                          }}
+                          className="h-5 w-5 rounded border-slate-300 text-emerald-600"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
+            );
+          })}
       </div>
     </div>
   );
 
   const renderMappings = () => (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid gap-4 md:grid-cols-4">
         {[
           { label: 'ODP Terdaftar', value: mappingPayload?.networkSummary.totalOdps ?? 0, icon: Network },
           { label: 'Total Port', value: mappingPayload?.networkSummary.totalPorts ?? 0, icon: Server },
@@ -838,14 +1228,14 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           const Icon = item.icon;
           return (
             <div key={item.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-              <Icon className="w-5 h-5 text-emerald-700" />
+              <Icon className="h-5 w-5 text-emerald-700" />
               <p className="mt-4 text-sm font-semibold text-slate-500">{item.label}</p>
               <p className="mt-1 text-3xl font-black text-slate-950">{item.value}</p>
             </div>
           );
         })}
       </div>
-      <div className="grid xl:grid-cols-[1fr_0.9fr] gap-6">
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Ringkasan ODP & port binding</h3>
           <div className="mt-5 space-y-3">
@@ -870,7 +1260,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
             {mappingPayload?.roleDivisionMap.map((item, index) => (
               <div key={`${item.role ?? 'map'}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-bold text-slate-900">{String(item.roleTitle ?? item.role ?? '-')}</p>
-                <p className="text-xs text-slate-500 mt-1">{String(item.division ?? '-')}</p>
+                <p className="mt-1 text-xs text-slate-500">{String(item.division ?? '-')}</p>
               </div>
             ))}
           </div>
@@ -881,7 +1271,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   const renderAudit = () => (
     <div className="space-y-6">
-      <div className="grid xl:grid-cols-[1.1fr_0.9fr] gap-6">
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Audit trail terbaru</h3>
           <div className="mt-5 space-y-3">
@@ -890,8 +1280,8 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-bold text-slate-900">{item.action}</p>
-                    <p className="text-xs text-slate-500 mt-1">{item.actorName} · {item.actorRole} · {item.timestamp}</p>
-                    <p className="text-xs text-slate-600 mt-2">{item.details}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.actorRole} · {item.timestamp}</p>
+                    <p className="mt-2 text-xs text-slate-600">{item.details}</p>
                   </div>
                   <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">{item.target}</span>
                 </div>
@@ -901,18 +1291,14 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         </div>
         <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
           <h3 className="text-lg font-black text-slate-950">Session user</h3>
-          <div className="mt-4 flex gap-3">
-            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">Online: {sessionSummary.online}</div>
-            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">Nonaktif: {sessionSummary.inactive}</div>
-          </div>
-          <div className="mt-5 space-y-3 max-h-[540px] overflow-y-auto">
+          <div className="mt-5 space-y-3 max-h-[560px] overflow-y-auto">
             {sessions.map((session) => (
               <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-bold text-slate-900">{session.name}</p>
                     <p className="text-xs text-slate-500">{session.email}</p>
-                    <p className="text-xs text-slate-500 mt-1">{session.division}</p>
+                    <p className="mt-1 text-xs text-slate-500">{session.division}</p>
                   </div>
                   <div className="text-right">
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${session.isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
@@ -934,9 +1320,13 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       case 'admin_users':
         return renderUserManagement();
       case 'admin_roles':
-        return renderRoleMapping();
+        return renderRoleMeta();
       case 'admin_master':
         return renderMasterData();
+      case 'admin_modules':
+        return renderModuleMaster();
+      case 'admin_module_roles':
+        return renderModuleToRole();
       case 'admin_mappings':
         return renderMappings();
       case 'admin_audit':
@@ -948,7 +1338,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   if (isLoading) {
     return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm text-sm text-slate-500">
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
         Memuat workspace superadmin...
       </div>
     );
@@ -957,37 +1347,45 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   return (
     <div className="space-y-6">
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">System Admin Workspace</p>
             <h1 className="mt-2 text-2xl font-black text-slate-950">{moduleTitles[selectedModule]?.title ?? moduleTitles.dashboard.title}</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">{moduleTitles[selectedModule]?.description ?? moduleTitles.dashboard.description}</p>
           </div>
-          {feedback && <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</div>}
-          {error && <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+          <div className="flex flex-wrap gap-2">
+            {feedback && <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</div>}
+            {error && <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+          </div>
         </div>
       </div>
 
       {renderByModule()}
 
       {isUserFormOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-950 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-slate-950 px-6 py-4 text-white">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Admin User Form</p>
                 <h3 className="mt-1 text-lg font-black">{editingUser ? 'Edit akun login' : 'Tambah akun login'}</h3>
               </div>
               <button onClick={() => setIsUserFormOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm">Tutup</button>
             </div>
-            <div className="p-6 grid md:grid-cols-2 gap-4">
+            <div className="grid gap-4 p-6 md:grid-cols-2">
               <input value={userForm.name} onChange={(event) => setUserForm((state) => ({ ...state, name: event.target.value }))} placeholder="Nama user" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
               <input value={userForm.email} onChange={(event) => setUserForm((state) => ({ ...state, email: event.target.value }))} placeholder="Email login" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-              <select value={userForm.role} onChange={(event) => handleRoleChange(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                {roleOptions.map((option) => <option key={option.value} value={option.value}>{option.value}</option>)}
+              <select value={userForm.role} onChange={(event) => setUserForm((state) => ({ ...state, role: event.target.value }))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                {availableUserRoles.map((role) => <option key={role.role} value={role.role}>{role.role}</option>)}
               </select>
-              <input value={userForm.roleTitle} onChange={(event) => setUserForm((state) => ({ ...state, roleTitle: event.target.value }))} placeholder="Role title" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-              <input value={userForm.division} onChange={(event) => setUserForm((state) => ({ ...state, division: event.target.value }))} placeholder="Division" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Role title</p>
+                <p className="mt-2 font-semibold">{selectedUserRoleMeta?.roleTitle ?? '-'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Division</p>
+                <p className="mt-2 font-semibold">{selectedUserRoleMeta?.division ?? '-'}</p>
+              </div>
               <input value={userForm.phone} onChange={(event) => setUserForm((state) => ({ ...state, phone: event.target.value }))} placeholder="Phone" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
               {!editingUser && (
                 <>
@@ -1000,9 +1398,9 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
                 Akun aktif
               </label>
             </div>
-            <div className="px-6 pb-6 flex justify-end">
+            <div className="flex justify-end px-6 pb-6">
               <button onClick={() => void saveUser()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-                <Save className="w-4 h-4" />
+                <Save className="h-4 w-4" />
                 Simpan Akun
               </button>
             </div>
@@ -1010,22 +1408,160 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         </div>
       )}
 
+      {isRoleFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-slate-950 px-6 py-4 text-white">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Master Role Form</p>
+                <h3 className="mt-1 text-lg font-black">{editingRole ? 'Edit role system' : 'Tambah role system'}</h3>
+              </div>
+              <button onClick={() => setIsRoleFormOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm">Tutup</button>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              <input
+                value={roleForm.role}
+                onChange={(event) => setRoleForm((state) => ({ ...state, role: event.target.value }))}
+                placeholder="Role key"
+                disabled={Boolean(editingRole)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
+              />
+              <input
+                value={roleForm.roleTitle}
+                onChange={(event) => setRoleForm((state) => ({ ...state, roleTitle: event.target.value }))}
+                placeholder="Role title"
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              />
+              <input
+                value={roleForm.division}
+                onChange={(event) => setRoleForm((state) => ({ ...state, division: event.target.value }))}
+                placeholder="Division"
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              />
+              <input
+                type="number"
+                value={roleForm.sortOrder ?? 0}
+                onChange={(event) => setRoleForm((state) => ({ ...state, sortOrder: Number(event.target.value) }))}
+                placeholder="Sort order"
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              />
+              <textarea
+                value={roleForm.description ?? ''}
+                onChange={(event) => setRoleForm((state) => ({ ...state, description: event.target.value }))}
+                placeholder="Deskripsi role"
+                className="min-h-[120px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm md:col-span-2"
+              />
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={roleForm.isActive} onChange={(event) => setRoleForm((state) => ({ ...state, isActive: event.target.checked }))} />
+                Role aktif
+              </label>
+            </div>
+            <div className="flex justify-end px-6 pb-6">
+              <button onClick={() => void saveRole()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+                <Save className="h-4 w-4" />
+                Simpan Role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {passwordTarget && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-950 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-slate-950 px-6 py-4 text-white">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-amber-300">Reset Password</p>
                 <h3 className="mt-1 text-lg font-black">{passwordTarget.name}</h3>
               </div>
               <button onClick={() => setPasswordTarget(null)} className="rounded-full bg-white/10 px-3 py-1 text-sm">Tutup</button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               <input type="password" value={passwordForm.password} onChange={(event) => setPasswordForm((state) => ({ ...state, password: event.target.value }))} placeholder="Password baru" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
               <input type="password" value={passwordForm.passwordConfirmation} onChange={(event) => setPasswordForm((state) => ({ ...state, passwordConfirmation: event.target.value }))} placeholder="Konfirmasi password baru" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
               <button onClick={() => void resetUserPassword()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-                <KeyRound className="w-4 h-4" />
+                <KeyRound className="h-4 w-4" />
                 Reset Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isModuleFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-slate-950 px-6 py-4 text-white">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Master Modul Form</p>
+                <h3 className="mt-1 text-lg font-black">{editingModule ? 'Edit modul navigasi' : 'Tambah modul navigasi'}</h3>
+              </div>
+              <button onClick={() => { setIsModuleFormOpen(false); setModuleFormErrors(defaultModuleFormErrors); }} className="rounded-full bg-white/10 px-3 py-1 text-sm">Tutup</button>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              {!editingModule && (
+                <div>
+                  <input value={moduleForm.key} onChange={(event) => { setModuleForm((state) => ({ ...state, key: event.target.value })); setModuleFormErrors((state) => ({ ...state, key: '' })); }} placeholder="module_key" className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm ${moduleFormErrors.key ? 'border-rose-300' : 'border-slate-200'}`} />
+                  {moduleFormErrors.key && <p className="mt-2 text-xs font-medium text-rose-600">{moduleFormErrors.key}</p>}
+                </div>
+              )}
+              <div>
+                <input value={moduleForm.label} onChange={(event) => { setModuleForm((state) => ({ ...state, label: event.target.value })); setModuleFormErrors((state) => ({ ...state, label: '' })); }} placeholder="Label modul" className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm ${moduleFormErrors.label ? 'border-rose-300' : 'border-slate-200'}`} />
+                {moduleFormErrors.label && <p className="mt-2 text-xs font-medium text-rose-600">{moduleFormErrors.label}</p>}
+              </div>
+              <input value={moduleForm.description} onChange={(event) => setModuleForm((state) => ({ ...state, description: event.target.value }))} placeholder="Deskripsi modul" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm md:col-span-2" />
+              <div>
+                <select value={moduleForm.navigationHeadKey} onChange={(event) => { setModuleForm((state) => ({ ...state, navigationHeadKey: event.target.value })); setModuleFormErrors((state) => ({ ...state, navigationHeadKey: '' })); }} className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm ${moduleFormErrors.navigationHeadKey ? 'border-rose-300' : 'border-slate-200'}`}>
+                  <option value="">Pilih kepala navigasi</option>
+                  {availableNavigationHeads.map((head) => <option key={head.key} value={head.key}>{head.label}</option>)}
+                </select>
+                {moduleFormErrors.navigationHeadKey && <p className="mt-2 text-xs font-medium text-rose-600">{moduleFormErrors.navigationHeadKey}</p>}
+              </div>
+              <input type="number" value={moduleForm.order} onChange={(event) => setModuleForm((state) => ({ ...state, order: Number(event.target.value) }))} placeholder="Urutan" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+              <div>
+                <input value={moduleForm.routeTarget} onChange={(event) => { setModuleForm((state) => ({ ...state, routeTarget: event.target.value })); setModuleFormErrors((state) => ({ ...state, routeTarget: '' })); }} placeholder="/app/helpdesk" className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm ${moduleFormErrors.routeTarget ? 'border-rose-300' : 'border-slate-200'}`} />
+                {moduleFormErrors.routeTarget && <p className="mt-2 text-xs font-medium text-rose-600">{moduleFormErrors.routeTarget}</p>}
+              </div>
+              <select value={moduleForm.quickAction ?? ''} onChange={(event) => setModuleForm((state) => ({ ...state, quickAction: (event.target.value || null) as AdminModule['quickAction'] }))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                <option value="">Tanpa quick action</option>
+                <option value="new_ticket">new_ticket</option>
+                <option value="new_customer">new_customer</option>
+                <option value="new_task">new_task</option>
+                <option value="new_procurement">new_procurement</option>
+              </select>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm md:col-span-2">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">View formats</p>
+                <div className="mt-3 flex flex-wrap gap-4">
+                  {(['table', 'grid', 'kanban', 'map'] as const).map((format) => (
+                    <label key={format} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={moduleForm.viewFormats.includes(format)}
+                        onChange={(event) => setModuleForm((state) => ({
+                          ...state,
+                          viewFormats: event.target.checked
+                            ? [...state.viewFormats, format]
+                            : state.viewFormats.filter((item) => item !== format),
+                        }))}
+                      />
+                      {format}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={moduleForm.showInNavbar} disabled={moduleForm.adminOnlyDashboard} onChange={(event) => setModuleForm((state) => ({ ...state, showInNavbar: event.target.checked }))} />
+                Tampilkan di navbar
+              </label>
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={moduleForm.adminOnlyDashboard} onChange={(event) => setModuleForm((state) => ({ ...state, adminOnlyDashboard: event.target.checked, showInNavbar: event.target.checked ? false : state.showInNavbar }))} />
+                Admin tool dashboard only
+              </label>
+            </div>
+            <div className="flex justify-end px-6 pb-6">
+              <button onClick={() => void saveModule()} disabled={availableNavigationHeads.length === 0} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+                <Save className="h-4 w-4" />
+                Simpan Modul
               </button>
             </div>
           </div>

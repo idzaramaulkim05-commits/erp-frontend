@@ -40,7 +40,8 @@ import { LoginPage } from './components/auth/LoginPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { getRoleWorkspace } from './config/roleWorkspace';
+import { getResolvedAllowedModules, getRoleWorkspace } from './config/roleWorkspace';
+import { getDefaultRouteForRole, getRoutePathForModule } from './routing/moduleRoutes';
 
 const FullScreenLoader: React.FC<{ label: string }> = ({ label }) => (
   <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
@@ -78,7 +79,7 @@ const LoginRoute: React.FC = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <LoginPage />;
@@ -88,7 +89,9 @@ const MainIOMSApp: React.FC = () => {
   const {
     selectedModule,
     activeRole,
+    navigationConfig,
   } = useIOMS();
+  const location = useLocation();
 
   // Modals & Drawer state
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
@@ -100,12 +103,22 @@ const MainIOMSApp: React.FC = () => {
   const [selectedTicketDetail, setSelectedTicketDetail] = useState<TroubleTicket | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const activeModule = roleWorkspace.allowedModules.includes(selectedModule)
+  const allowedModules = getResolvedAllowedModules(activeRole, navigationConfig);
+  const activeModule = allowedModules.includes(selectedModule)
     ? selectedModule
-    : roleWorkspace.defaultModule;
+    : (allowedModules.includes(roleWorkspace.defaultModule) ? roleWorkspace.defaultModule : allowedModules[0] ?? roleWorkspace.defaultModule);
+  const fallbackRoute = getDefaultRouteForRole(activeRole, navigationConfig);
   const showSearchBar = roleWorkspace.shellMode === 'compact';
   const showFooter = roleWorkspace.shellMode !== 'standalone';
-  const canOpenSidebar = roleWorkspace.showSidebarNavigation && roleWorkspace.allowedModules.length > 1;
+  const canOpenSidebar = roleWorkspace.showSidebarNavigation && allowedModules.length > 1;
+
+  if (location.pathname === '/app' || location.pathname === '/app/') {
+    return <Navigate to={fallbackRoute} replace />;
+  }
+
+  if (selectedModule !== activeModule) {
+    return <Navigate to={getRoutePathForModule(activeModule)} replace />;
+  }
 
   const renderModuleView = (moduleId: AppModule) => {
     switch (moduleId) {
@@ -151,6 +164,8 @@ const MainIOMSApp: React.FC = () => {
       case 'admin_users':
       case 'admin_roles':
       case 'admin_master':
+      case 'admin_modules':
+      case 'admin_module_roles':
       case 'admin_mappings':
       case 'admin_audit':
         return <SuperadminDashboardView selectedModule={moduleId} />;
@@ -276,7 +291,26 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<MainIOMSApp />} />
+            <Route path="/" element={<Navigate to="/app" replace />} />
+            <Route path="/app" element={<MainIOMSApp />} />
+            <Route path="/app/dashboard" element={<MainIOMSApp />} />
+            <Route path="/app/service-registrations" element={<MainIOMSApp />} />
+            <Route path="/app/helpdesk" element={<MainIOMSApp />} />
+            <Route path="/app/noc" element={<MainIOMSApp />} />
+            <Route path="/app/lead-tech" element={<MainIOMSApp />} />
+            <Route path="/app/field-tech" element={<MainIOMSApp />} />
+            <Route path="/app/finance" element={<MainIOMSApp />} />
+            <Route path="/app/inventory" element={<MainIOMSApp />} />
+            <Route path="/app/kanban" element={<MainIOMSApp />} />
+            <Route path="/app/network-map" element={<MainIOMSApp />} />
+            <Route path="/app/admin" element={<MainIOMSApp />} />
+            <Route path="/app/admin/users" element={<MainIOMSApp />} />
+            <Route path="/app/admin/roles" element={<MainIOMSApp />} />
+            <Route path="/app/admin/master" element={<MainIOMSApp />} />
+            <Route path="/app/admin/modules" element={<MainIOMSApp />} />
+            <Route path="/app/admin/module-roles" element={<MainIOMSApp />} />
+            <Route path="/app/admin/mappings" element={<MainIOMSApp />} />
+            <Route path="/app/admin/audit" element={<MainIOMSApp />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

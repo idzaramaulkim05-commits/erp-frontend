@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import confetti from 'canvas-confetti';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AppModule,
+  NavigationConfig,
   UserRole,
   UserProfile,
   ServiceRegistration,
@@ -17,7 +19,8 @@ import {
 } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
 import { useAuth } from './AuthContext';
-import { getDefaultModuleForRole, isModuleAllowedForRole } from '../config/roleWorkspace';
+import { getResolvedAllowedModules } from '../config/roleWorkspace';
+import { getDefaultRouteForRole, getModuleFromPathname, getRoutePathForModule } from '../routing/moduleRoutes';
 
 interface IOMSContextType {
   currentUser: UserProfile;
@@ -28,7 +31,7 @@ interface IOMSContextType {
   isSplitScreenView: boolean;
   setIsSplitScreenView: (val: boolean) => void;
   selectedModule: AppModule;
-  setSelectedModule: React.Dispatch<React.SetStateAction<AppModule>>;
+  setSelectedModule: (module: AppModule) => void;
   selectedRegion: string;
   setSelectedRegion: (region: string) => void;
   selectedOdpFilter: string;
@@ -39,6 +42,7 @@ interface IOMSContextType {
   setDateRange: (range: { start: string; end: string }) => void;
   viewFormat: 'table' | 'grid' | 'kanban' | 'map';
   setViewFormat: (fmt: 'table' | 'grid' | 'kanban' | 'map') => void;
+  navigationConfig: NavigationConfig | null;
   customers: Customer[];
   serviceRegistrations: ServiceRegistration[];
   tickets: TroubleTicket[];
@@ -140,15 +144,17 @@ const unwrapCollection = <T,>(payload: unknown): T[] => {
 
 export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, authFetch, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
   const [isMobileDeviceView, setIsMobileDeviceView] = useState<boolean>(false);
   const [isSplitScreenView, setIsSplitScreenView] = useState<boolean>(false);
-  const [selectedModule, setSelectedModule] = useState<AppModule>(getDefaultModuleForRole(emptyUser.role));
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
   const [selectedOdpFilter, setSelectedOdpFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [dateRange, setDateRange] = useState({ start: '2026-08-01', end: '2026-08-15' });
   const [viewFormat, setViewFormat] = useState<'table' | 'grid' | 'kanban' | 'map'>('table');
+  const [navigationConfig, setNavigationConfig] = useState<NavigationConfig | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceRegistrations, setServiceRegistrations] = useState<ServiceRegistration[]>([]);
   const [tickets, setTickets] = useState<TroubleTicket[]>([]);
@@ -160,6 +166,22 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [auditLogs, setAuditLogs] = useState<ActivityAuditLog[]>([]);
   const currentUser = user ?? emptyUser;
   const activeRole = currentUser.role;
+  const selectedModule = useMemo<AppModule>(() => {
+    const moduleFromRoute = getModuleFromPathname(location.pathname);
+    if (moduleFromRoute) {
+      return moduleFromRoute;
+    }
+
+    const fallbackPath = getDefaultRouteForRole(activeRole, navigationConfig);
+    return getModuleFromPathname(fallbackPath) ?? 'dashboard';
+  }, [activeRole, location.pathname, navigationConfig]);
+
+  const setSelectedModule = (module: AppModule) => {
+    const nextPath = getRoutePathForModule(module);
+    if (location.pathname !== nextPath) {
+      navigate(nextPath);
+    }
+  };
 
   const triggerCelebration = () => {
     try {
@@ -190,6 +212,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       tasksPayload,
       odpsPayload,
       auditPayload,
+      navigationPayload,
     ] = await Promise.all([
       apiRequest<unknown>('/users'),
       apiRequest<unknown>('/customers'),
@@ -201,6 +224,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       apiRequest<unknown>('/tasks'),
       apiRequest<unknown>('/network-odps'),
       apiRequest<unknown>('/audit-logs'),
+      apiRequest<{ data: NavigationConfig }>('/auth/navigation'),
     ]);
 
     const nextUsers = withAvatarFallback(unwrapCollection<UserProfile>(usersPayload));
@@ -214,6 +238,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setTasks(unwrapCollection<InterDivisionTask>(tasksPayload));
     setNetworkOdps(unwrapCollection<NetworkODP>(odpsPayload));
     setAuditLogs(unwrapCollection<ActivityAuditLog>(auditPayload));
+    setNavigationConfig(navigationPayload.data);
   };
 
   useEffect(() => {
@@ -231,17 +256,12 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   useEffect(() => {
-    const nextDefaultModule = getDefaultModuleForRole(activeRole);
     setIsMobileDeviceView(activeRole === 'field_tech');
 
     if (activeRole !== 'noc') {
       setIsSplitScreenView(false);
     }
-
-    setSelectedModule((currentModule) => (
-      isModuleAllowedForRole(activeRole, currentModule) ? currentModule : nextDefaultModule
-    ));
-  }, [activeRole]);
+  }, [activeRole, navigationConfig]);
 
   const runMutation = (work: () => Promise<void>) => {
     void (async () => {
@@ -586,6 +606,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setDateRange,
         viewFormat,
         setViewFormat,
+        navigationConfig,
         customers,
         serviceRegistrations,
         tickets,
