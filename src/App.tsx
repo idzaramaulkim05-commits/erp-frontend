@@ -326,6 +326,7 @@ export default function App() {
             <Route path="/app/request-rembes" element={<MainIOMSApp />} />
             <Route path="/app/approval-rembes-finance" element={<MainIOMSApp />} />
             <Route path="/app/laporan-keuangan" element={<MainIOMSApp />} />
+            <Route path="/app/retur-gudang-perangkat" element={<MainIOMSApp />} />
             <Route path="/app/panel-kepala-teknisi" element={<MainIOMSApp />} />
             <Route path="/app/panel-teknisi-lapangan" element={<MainIOMSApp />} />
             <Route path="/app/pengerjaan-instalasi-lapangan" element={<MainIOMSApp />} />
@@ -352,6 +353,7 @@ export default function App() {
             <Route path="/app/admin/module-roles" element={<MainIOMSApp />} />
             <Route path="/app/admin/mappings" element={<MainIOMSApp />} />
             <Route path="/app/admin/audit" element={<MainIOMSApp />} />
+            <Route path="/app/*" element={<MainIOMSApp />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

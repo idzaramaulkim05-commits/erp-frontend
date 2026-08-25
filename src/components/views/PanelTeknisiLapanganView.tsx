@@ -1,22 +1,34 @@
 import React, { useMemo } from 'react';
-import { ClipboardList, Hammer, Hourglass, RotateCcw, Route, Wrench } from 'lucide-react';
+import {
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  Hammer,
+  MapPin,
+  MessageCircle,
+  Navigation,
+  RefreshCcw,
+  Route,
+  Smartphone,
+  Wrench,
+} from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
 import { WorkOrder } from '../../types';
+import { extractCoordinatesFromUrl, getGoogleMapsDirectionUrl } from '../../utils/coordinates';
 
 const getStatusTone = (status: WorkOrder['status']) => {
   switch (status) {
     case 'menunggu_konfirmasi_teknisi':
-      return 'bg-amber-100 text-amber-700 border-amber-200';
+      return 'bg-amber-100 text-amber-800 border-amber-200';
     case 'assigned':
-      return 'bg-sky-100 text-sky-700 border-sky-200';
+      return 'bg-sky-100 text-sky-800 border-sky-200';
     case 'sedang_diinstal':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'in_progress':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
     case 'menunggu_qc_noc':
-      return 'bg-violet-100 text-violet-700 border-violet-200';
+      return 'bg-violet-100 text-violet-800 border-violet-200';
     case 'dikembalikan_ke_teknisi':
-      return 'bg-rose-100 text-rose-700 border-rose-200';
+      return 'bg-rose-100 text-rose-800 border-rose-200';
     default:
       return 'bg-slate-100 text-slate-700 border-slate-200';
   }
@@ -25,20 +37,27 @@ const getStatusTone = (status: WorkOrder['status']) => {
 const getStatusLabel = (status: WorkOrder['status']) => {
   switch (status) {
     case 'menunggu_konfirmasi_teknisi':
-      return 'WO Baru Menunggu Konfirmasi';
+      return 'Konfirmasi Penugasan';
     case 'assigned':
-      return 'Menunggu Dikerjakan';
+      return 'Siap Jalan';
     case 'sedang_diinstal':
-      return 'Sedang Diinstal';
     case 'in_progress':
       return 'Sedang Dikerjakan';
     case 'menunggu_qc_noc':
       return 'Menunggu QC NOC';
     case 'dikembalikan_ke_teknisi':
-      return 'Revisi dari NOC';
+      return 'Revisi NOC';
     default:
       return status;
   }
+};
+
+const normalizeWhatsAppNumber = (phone?: string | null) => {
+  const digits = (phone ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('62') && digits.length >= 10) return digits;
+  if (digits.startsWith('0') && digits.length >= 10) return `62${digits.slice(1)}`;
+  return null;
 };
 
 export const PanelTeknisiLapanganView: React.FC = () => {
@@ -50,97 +69,151 @@ export const PanelTeknisiLapanganView: React.FC = () => {
 
   const myWorkOrders = useMemo(
     () => workOrders.filter((workOrder) => (
-      (workOrder.type === 'installation' || workOrder.type === 'maintenance')
+      (workOrder.type === 'installation' || workOrder.type === 'maintenance' || workOrder.type === 'uninstallation')
       && workOrder.assignedTechId === currentUser.id
       && ['menunggu_konfirmasi_teknisi', 'assigned', 'sedang_diinstal', 'in_progress', 'menunggu_qc_noc', 'dikembalikan_ke_teknisi'].includes(workOrder.status)
     )),
     [currentUser.id, workOrders],
   );
 
-  const confirmationCount = myWorkOrders.filter((workOrder) => workOrder.status === 'menunggu_konfirmasi_teknisi').length;
-  const waitingCount = myWorkOrders.filter((workOrder) => workOrder.status === 'assigned').length;
-  const inProgressCount = myWorkOrders.filter((workOrder) => workOrder.status === 'sedang_diinstal' || workOrder.status === 'in_progress').length;
-  const qcCount = myWorkOrders.filter((workOrder) => workOrder.status === 'menunggu_qc_noc').length;
-  const revisionCount = myWorkOrders.filter((workOrder) => workOrder.status === 'dikembalikan_ke_teknisi').length;
+  const confirmationCount = myWorkOrders.filter((wo) => wo.status === 'menunggu_konfirmasi_teknisi').length;
+  const waitingCount = myWorkOrders.filter((wo) => wo.status === 'assigned').length;
+  const inProgressCount = myWorkOrders.filter((wo) => wo.status === 'sedang_diinstal' || wo.status === 'in_progress').length;
+  const qcCount = myWorkOrders.filter((wo) => wo.status === 'menunggu_qc_noc' || wo.status === 'dikembalikan_ke_teknisi').length;
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[30px] border border-slate-200 bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 text-white shadow-xl">
-        <div className="max-w-3xl">
-          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-200">Dashboard Teknisi Lapangan</div>
-          <h1 className="mt-3 text-3xl font-black tracking-tight">Summary pekerjaan dan antrean kerja saya</h1>
+    <div className="space-y-4 pb-10">
+      {/* Header */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
+              <Smartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-base font-black text-slate-950 sm:text-lg">Panel Teknisi Lapangan</h1>
+              <p className="text-[11px] font-semibold text-slate-500">Antrean tugas aktif & penugasan kerja</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedModule('pengerjaan_instalasi_lapangan')}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition"
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            <span>Buka Pengerjaan Lapangan</span>
+          </button>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-5">
+      {/* KPI Cards */}
+      <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
-          { label: 'Total WO Saya', value: myWorkOrders.length, icon: ClipboardList, accent: 'text-slate-700 bg-slate-100' },
-          { label: 'WO Baru', value: confirmationCount, icon: Hourglass, accent: 'text-amber-700 bg-amber-100' },
-          { label: 'Menunggu Dikerjakan', value: waitingCount, icon: Hourglass, accent: 'text-sky-700 bg-sky-100' },
-          { label: 'Sedang Dikerjakan', value: inProgressCount, icon: Hammer, accent: 'text-emerald-700 bg-emerald-100' },
-          { label: 'QC / Revisi', value: qcCount + revisionCount, icon: RotateCcw, accent: 'text-violet-700 bg-violet-100' },
-        ].map((item) => {
-          const Icon = item.icon;
+          { label: 'Konfirmasi WO', value: confirmationCount, icon: Clock, color: 'text-amber-700 bg-amber-50 border-amber-200' },
+          { label: 'Siap Jalan', value: waitingCount, icon: Navigation, color: 'text-sky-700 bg-sky-50 border-sky-200' },
+          { label: 'Sedang Jalan', value: inProgressCount, icon: Hammer, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+          { label: 'QC / Revisi', value: qcCount, icon: CheckCircle2, color: 'text-violet-700 bg-violet-50 border-violet-200' },
+        ].map((kpi) => {
+          const Icon = kpi.icon;
           return (
-            <div key={item.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${item.accent}`}>
-                <Icon className="h-5 w-5" />
+            <div key={kpi.label} className={`rounded-xl border p-3 ${kpi.color}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold">{kpi.label}</span>
+                <Icon className="h-4 w-4 opacity-80" />
               </div>
-              <div className="mt-4 text-3xl font-black text-slate-950">{item.value}</div>
-              <div className="mt-1 text-sm font-semibold text-slate-800">{item.label}</div>
+              <div className="mt-1 text-2xl font-black">{kpi.value}</div>
             </div>
           );
         })}
       </section>
 
-      <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-black tracking-tight text-slate-900">Daftar Pekerjaan Aktif</h2>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSelectedModule('pengerjaan_instalasi_lapangan')}
-            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            <Route className="h-4 w-4" />
-            Buka Halaman Kerja Lapangan
-          </button>
+      {/* Active Work Orders List */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-black text-slate-900">Daftar Penugasan Aktif ({myWorkOrders.length})</h2>
+          <span className="text-[11px] font-bold text-slate-400">Teknisi: {currentUser.name}</span>
         </div>
 
-        <div className="mt-6 grid gap-3">
-          {myWorkOrders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-              Belum ada WO aktif yang ditugaskan ke teknisi ini.
-            </div>
-          ) : myWorkOrders.map((workOrder) => (
-            <div key={workOrder.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white">
-                    {workOrder.id}
-                  </span>
-                  <span className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${getStatusTone(workOrder.status)}`}>
-                    {getStatusLabel(workOrder.status)}
-                  </span>
+        {myWorkOrders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-xs text-slate-400">
+            Tidak ada Work Order aktif saat ini.
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {myWorkOrders.map((wo) => {
+              const wa = normalizeWhatsAppNumber(wo.customerPhone);
+              const coords = extractCoordinatesFromUrl(wo.shareLocationUrl);
+
+              return (
+                <div key={wo.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5 transition hover:bg-slate-50">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <strong className="text-sm font-bold text-slate-900">{wo.customerName}</strong>
+                        <span className="font-mono text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">{wo.id}</span>
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {wo.packagePlan || 'Layanan Internet'} • <span className="font-semibold text-emerald-700">{wo.region}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-600 line-clamp-1 flex items-center gap-1">
+                        <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
+                        <span>{wo.address}</span>
+                      </div>
+                    </div>
+
+                    <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getStatusTone(wo.status)}`}>
+                      {getStatusLabel(wo.status)}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60">
+                    <div className="flex items-center gap-2">
+                      {wa && (
+                        <a
+                          href={`https://wa.me/${wa}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-500"
+                        >
+                          <MessageCircle className="h-3 w-3" /> WA
+                        </a>
+                      )}
+                      {coords ? (
+                        <a
+                          href={getGoogleMapsDirectionUrl(coords.lat, coords.lng)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          <Navigation className="h-3 w-3 text-emerald-600" /> Maps
+                        </a>
+                      ) : wo.shareLocationUrl ? (
+                        <a
+                          href={wo.shareLocationUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          <ExternalLink className="h-3 w-3 text-emerald-600" /> Link
+                        </a>
+                      ) : null}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModule('pengerjaan_instalasi_lapangan')}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-slate-800 transition shadow-xs"
+                    >
+                      <Wrench className="h-3.5 w-3.5" />
+                      <span>Kerjakan WO</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-3 text-sm font-bold text-slate-900">{workOrder.customerName}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {workOrder.type === 'maintenance' ? 'Gangguan / Maintenance' : (workOrder.packagePlan ?? 'Paket belum tercatat')} • {workOrder.region}
-                </div>
-                <div className="mt-2 text-xs text-slate-500">{workOrder.address}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedModule('pengerjaan_instalasi_lapangan')}
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700"
-              >
-                <Wrench className="h-4 w-4" />
-                Kerjakan di Halaman Lapangan
-              </button>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );

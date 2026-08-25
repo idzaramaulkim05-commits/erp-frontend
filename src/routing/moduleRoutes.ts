@@ -47,14 +47,35 @@ export const isImplementedAppModule = (moduleKey: string): moduleKey is Implemen
 export const getRoutePathForModule = (module: AppModule): string => MODULE_ROUTE_MAP[module];
 
 export const getModuleFromPathname = (pathname: string): AppModule | null => {
-  const normalized = pathname.replace(/\/+$/, '') || '/';
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    decoded = pathname;
+  }
+
+  const normalized = decoded.replace(/\/+$/, '') || '/';
 
   if (normalized === '/app/admin') {
     return 'dashboard';
   }
 
+  // 1. Direct match
   const match = ROUTE_MODULE_ENTRIES.find(([, routePath]) => routePath === normalized);
-  return match?.[0] ?? null;
+  if (match) return match[0];
+
+  // 2. Normalized dash / space / underscore match
+  const sanitized = normalized.toLowerCase().replace(/[\s_]+/g, '-');
+  const sanitizedMatch = ROUTE_MODULE_ENTRIES.find(([, routePath]) => routePath.toLowerCase().replace(/[\s_]+/g, '-') === sanitized);
+  if (sanitizedMatch) return sanitizedMatch[0];
+
+  // 3. Match against module key directly (e.g. /app/retur_gudang_perangkat)
+  const strippedKey = normalized.replace(/^\/app\//, '').replace(/[-\s]+/g, '_');
+  if (isImplementedAppModule(strippedKey)) {
+    return strippedKey;
+  }
+
+  return null;
 };
 
 export const isKnownModuleRouteTarget = (routeTarget: string): routeTarget is AppModule => isImplementedAppModule(routeTarget);
