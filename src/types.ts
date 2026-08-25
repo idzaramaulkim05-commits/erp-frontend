@@ -13,6 +13,23 @@ export type UserRole = KnownUserRole | (string & {});
 
 export type AppModule =
   | 'dashboard'
+  | 'about'
+  | 'pelanggan'
+  | 'penagihan'
+  | 'request_pppoe_noc'
+  | 'request_rembes'
+  | 'approval_rembes_finance'
+  | 'laporan_keuangan'
+  | 'retur_gudang_perangkat'
+  | 'panel_kepala_teknisi'
+  | 'panel_teknisi_lapangan'
+  | 'pengerjaan_instalasi_lapangan'
+  | 'qc_instalasi_noc'
+  | 'registrasi_pelanggan_baru'
+  | 'validasi_registrasi'
+  | 'survey_instalasi'
+  | 'request_gudang_instalasi'
+  | 'aktivasi_instalasi'
   | 'service_registrations'
   | 'helpdesk'
   | 'noc'
@@ -39,6 +56,7 @@ export interface UserProfile {
   role: UserRole;
   roleTitle: string;
   division: string;
+  dashboardModuleKey?: AppModule | null;
   avatar: string;
   phone: string;
   isOnline: boolean;
@@ -48,6 +66,15 @@ export interface UserProfile {
 
 export type ServiceRegistrationStatus =
   | 'draft'
+  | 'menunggu_validasi'
+  | 'perlu_perbaikan_data'
+  | 'menunggu_survey'
+  | 'survey_layak'
+  | 'survey_tidak_layak'
+  | 'siap_wo_instalasi'
+  | 'sedang_diinstal'
+  | 'menunggu_qc_noc'
+  | 'selesai'
   | 'submitted'
   | 'pending_finance'
   | 'finance_approved'
@@ -66,14 +93,29 @@ export interface ServiceRegistration {
   id: string;
   name: string;
   nik: string;
+  gender: string;
   phone: string;
   address: string;
   region: string;
   packagePlan: string;
   monthlyFee: number;
-  odpId: string;
+  installationFee?: number | null;
+  odpId?: string | null;
+  entrySource?: string | null;
+  shareLocationUrl?: string | null;
+  housePhoto?: string | null;
   odpPortCandidate?: number | null;
   status: ServiceRegistrationStatus;
+  validationStatus?: string | null;
+  validationNotes?: string | null;
+  validatedBy?: string | null;
+  validatedAt?: string | null;
+  surveyStatus?: string | null;
+  surveyResult?: 'layak' | 'tidak_layak' | null;
+  surveyNotes?: string | null;
+  surveyedBy?: string | null;
+  surveyedAt?: string | null;
+  surveyData?: Record<string, unknown>;
   financeStatus: 'pending' | 'approved' | 'rejected';
   financeNotes?: string | null;
   financeApprovedBy?: string | null;
@@ -87,6 +129,9 @@ export interface ServiceRegistration {
   generatedAt?: string | null;
   customerId?: string | null;
   workOrderId?: string | null;
+  installationMaterialRequestId?: string | null;
+  activationReport?: Record<string, unknown>;
+  activationDocument?: Record<string, unknown>;
   requestedBy?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -139,6 +184,7 @@ export interface RoleMeta {
   role: UserRole;
   roleTitle: string;
   division: string;
+  dashboardModuleKey?: AppModule | null;
   description?: string | null;
   isActive: boolean;
   sortOrder?: number;
@@ -235,10 +281,85 @@ export interface Customer {
   status: CustomerStatus;
   billingStatus: 'paid' | 'unpaid' | 'pending';
   billingDueDate: string;
+  serviceStartedAt?: string | null;
+  serviceActiveUntil?: string | null;
   ktpImage?: string;
   installedDate: string;
   assignedTechnician?: string;
   lastPaymentDate?: string;
+}
+
+export type ReimbursementStatus =
+  | 'draft'
+  | 'pending_finance'
+  | 'pending_management'
+  | 'rejected'
+  | 'approved'
+  | 'paid';
+
+export interface ReimbursementRequestItem {
+  id?: number;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  unitAmount: number;
+  subtotal: number;
+  notes?: string | null;
+}
+
+export interface ReimbursementRequest {
+  id: string;
+  requestedById: string;
+  requestedByName?: string | null;
+  requesterRole: UserRole;
+  requesterDivision: string;
+  transactionDate: string;
+  description: string;
+  totalClaim: number;
+  status: ReimbursementStatus;
+  receiptPath?: string | null;
+  receiptUrl?: string | null;
+  financeNotes?: string | null;
+  managementNotes?: string | null;
+  financeReviewedBy?: string | null;
+  financeReviewedAt?: string | null;
+  managementReviewedBy?: string | null;
+  managementReviewedAt?: string | null;
+  paidBy?: string | null;
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+  paidAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  items: ReimbursementRequestItem[];
+}
+
+export interface FinanceMutation {
+  id: string;
+  transactionDate: string;
+  type: 'inflow' | 'outflow';
+  category: string;
+  amount: number;
+  description: string;
+  reference?: string | null;
+  status?: string | null;
+  createdById?: string | null;
+  createdByName?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface FinancialLedgerEntry {
+  id: string;
+  transactionDate: string;
+  source: 'billing' | 'reimburse' | 'manual_mutation' | string;
+  type: 'inflow' | 'outflow';
+  category: string;
+  amount: number;
+  description: string;
+  reference?: string | null;
+  status?: string | null;
+  actorName?: string | null;
 }
 
 export type TicketCategory =
@@ -255,10 +376,12 @@ export type TicketStatus =
   | 'in_noc_review' // NOC assessing remote vs field
   | 'assigned_to_lead' // Escalated to Lead Tech
   | 'field_progress' // Field Tech working on site
+  | 'field_done_waiting_helpdesk_qc' // Field work or remote fix done, waiting helpdesk QC
   | 'lead_sop_approved' // Lead Tech checked physical SOP
   | 'noc_verifying' // NOC checking optical dBm & PPPoE session
   | 'closed' // Ticket verified & completed
   | 'cancelled';
+export type ExtendedTicketStatus = TicketStatus | 'menunggu_retur_gudang';
 
 export interface TroubleTicket {
   id: string; // e.g. "TKT-2026-0881"
@@ -272,7 +395,7 @@ export interface TroubleTicket {
   title: string;
   description: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
-  status: TicketStatus;
+  status: ExtendedTicketStatus;
   createdAt: string;
   createdBy: string;
   assignedTo?: string; // Lead Tech or Field Tech
@@ -314,14 +437,31 @@ export interface TroubleTicket {
     rxPowerThresholdPassed: boolean;
     notes?: string;
   };
+  replacementContext?: {
+    requiresReplacementRequest?: boolean;
+    requestedItems?: Array<{
+      itemName: string;
+      quantity: number;
+      unit: string;
+    }>;
+    returnType?: 'replacement' | 'uninstallation' | string;
+    outboundRequestStatus?: string | null;
+    warehouseReturnStatus?: string | null;
+    holdTicketUntilWarehouseReturn?: boolean;
+  };
 }
 
 export type WorkOrderType = 'installation' | 'maintenance' | 'uninstallation';
 export type WorkOrderStatus =
   | 'pending'
   | 'pending_lead_assignment'
+  | 'menunggu_konfirmasi_teknisi'
   | 'assigned'
   | 'in_progress'
+  | 'sedang_diinstal'
+  | 'menunggu_qc_noc'
+  | 'dikembalikan_ke_teknisi'
+  | 'closed'
   | 'sop_submitted'
   | 'field_submitted'
   | 'waiting_noc_activation'
@@ -331,20 +471,38 @@ export type WorkOrderStatus =
 export interface WorkOrder {
   id: string; // e.g. "WO-2026-0412"
   type: WorkOrderType;
-  customerId: string;
+  customerId?: string | null;
   customerName: string;
   customerPhone: string;
   address: string;
   region: string;
-  odpId: string;
+  odpId?: string | null;
+  shareLocationUrl?: string | null;
+  housePhoto?: string | null;
   assignedLead: string;
   assignedTechId?: string;
   assignedTechName?: string;
   ticketId?: string;
   serviceRegistrationId?: string;
+  installationMaterialRequestId?: string | null;
+  warehouseReturnRequestId?: string | null;
   status: WorkOrderStatus;
   scheduledDate: string;
   packagePlan?: string;
+  installationFeeActual?: number | null;
+  installationPaymentMethod?: 'tunai' | 'transfer' | null;
+  installationPaymentStatus?: 'pending_finance' | 'confirmed_finance' | null;
+  installationPaymentCustomerPaid?: boolean;
+  installationPaymentConfirmedAt?: string | null;
+  installationPaymentConfirmedBy?: string | null;
+  installationPaymentNotes?: string | null;
+  customerBiodataConfirmed?: boolean;
+  routerSn?: string | null;
+  pppoeRequestStatus?: 'not_requested' | 'pending_noc' | 'approved' | 'rejected' | null;
+  pppoeRequestedAt?: string | null;
+  pppoeRequestedBy?: string | null;
+  pppoeApprovedAt?: string | null;
+  pppoeApprovedBy?: string | null;
   requiredMaterials: {
     itemName: string;
     quantity: number;
@@ -357,9 +515,44 @@ export interface WorkOrder {
   }[];
   photos?: {
     ktp?: string;
+    odp?: string;
     opmReading?: string;
     installedDevice?: string;
+    modemIdentity?: string;
+    installationResult?: string;
   };
+  surveySnapshot?: Record<string, unknown>;
+  activationPayload?: Record<string, unknown>;
+  onuIdentity?: {
+    ponSn?: string;
+    serialNumber?: string;
+    macAddress?: string;
+    source?: string;
+  };
+  networkCredentials?: Record<string, unknown>;
+  maintenancePayload?: {
+    replacementFlowActive?: boolean;
+    replacementRecommendedByNoc?: boolean;
+    replacementRequestedItems?: Array<{ itemName: string; quantity: number; unit: string }>;
+    fieldActionType?: string | null;
+    deviceReplacementApplied?: boolean;
+    uninstallationFlowActive?: boolean;
+    replacementSummary?: string | null;
+    oldDeviceSnapshot?: Record<string, unknown> | null;
+    newDeviceIdentity?: Record<string, unknown> | null;
+    returnItems?: Array<{
+      itemName: string;
+      quantity: number;
+      unit: string;
+      returnCategory?: string;
+      serialNumbers?: string[];
+    }>;
+    warehouseReturnStatus?: string | null;
+  };
+  warehouseReturnStatus?: string | null;
+  qcStatus?: string | null;
+  qcNotes?: string | null;
+  returnedToTechAt?: string | null;
   finalVerification?: {
     verified?: boolean;
     verifiedBy?: string;
@@ -373,6 +566,53 @@ export interface WorkOrder {
   nocActivated?: boolean;
   createdAt: string;
   completedAt?: string;
+}
+
+export interface InstallationMaterialRequest {
+  id: string;
+  serviceRegistrationId?: string | null;
+  workOrderId?: string | null;
+  ticketId?: string | null;
+  customerName: string;
+  requestedBy: string;
+  requestPurpose?: string | null;
+  status: 'menunggu_persetujuan_gudang' | 'diproses_gudang' | 'siap_diserahkan' | 'diserahkan_ke_teknisi' | 'ditolak' | string;
+  items: Array<{
+    itemName: string;
+    quantity: number;
+    unit: string;
+  }>;
+  approvalNotes?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  deliveredBy?: string | null;
+  deliveredAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface WarehouseReturnRequest {
+  id: string;
+  workOrderId: string;
+  ticketId?: string | null;
+  customerId?: string | null;
+  customerName: string;
+  submittedBy?: string | null;
+  returnType?: 'replacement' | 'uninstallation' | string;
+  status: 'menunggu_qc_gudang' | 'retur_selesai' | string;
+  items: Array<{
+    itemName: string;
+    quantity: number;
+    unit: string;
+    returnCategory?: string;
+    serialNumbers?: string[];
+  }>;
+  qcNotes?: string | null;
+  receivedBy?: string | null;
+  receivedAt?: string | null;
+  closedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface InventoryItem {
@@ -422,6 +662,12 @@ export interface ProcurementRequest {
     at: string;
     notes?: string;
   };
+  orderedBy?: string | null;
+  orderedAt?: string | null;
+  orderedNotes?: string | null;
+  rejectionNotes?: string | null;
+  lastRejectedBy?: string | null;
+  lastRejectedAt?: string | null;
   receivedAt?: string;
 }
 

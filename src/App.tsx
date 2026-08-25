@@ -11,20 +11,34 @@ import { useIOMS, IOMSProvider } from './context/IOMSContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SidebarNav } from './components/SidebarNav';
 import { HeaderNavbar } from './components/HeaderNavbar';
-import { SearchAndFilterBar } from './components/SearchAndFilterBar';
 
 // Views
 import { HelpdeskView } from './components/views/HelpdeskView';
 import { ServiceRegistrationsView } from './components/views/ServiceRegistrationsView';
 import { NOCDashboardView } from './components/views/NOCDashboardView';
-import { LeadTechDashboardView } from './components/views/LeadTechDashboardView';
-import { FieldTechMobileView } from './components/views/FieldTechMobileView';
 import { FinanceBillingView } from './components/views/FinanceBillingView';
 import { InventoryWarehouseView } from './components/views/InventoryWarehouseView';
 import { InterDivisionKanbanView } from './components/views/InterDivisionKanbanView';
 import { NetworkMappingView } from './components/views/NetworkMappingView';
 import { ManagementDashboardView } from './components/views/ManagementDashboardView';
 import { SuperadminDashboardView } from './components/views/SuperadminDashboardView';
+import { AboutView } from './components/views/AboutView';
+import { PelangganView } from './components/views/PelangganView';
+import { PenagihanView } from './components/views/PenagihanView';
+import { RequestPppoeNocView } from './components/views/RequestPppoeNocView';
+import { RequestRembesView } from './components/views/RequestRembesView';
+import { ApprovalRembesFinanceView } from './components/views/ApprovalRembesFinanceView';
+import { LaporanKeuanganView } from './components/views/LaporanKeuanganView';
+import { ReturGudangPerangkatView } from './components/views/ReturGudangPerangkatView';
+import { PanelKepalaTeknisiView } from './components/views/PanelKepalaTeknisiView';
+import { PanelTeknisiLapanganView } from './components/views/PanelTeknisiLapanganView';
+import { PengerjaanInstalasiLapanganView } from './components/views/PengerjaanInstalasiLapanganView';
+import { QCInstalasiNocView } from './components/views/QCInstalasiNocView';
+import { RegistrasiPelangganBaruView } from './components/views/RegistrasiPelangganBaruView';
+import { ValidasiRegistrasiView } from './components/views/ValidasiRegistrasiView';
+import { SurveyInstalasiView } from './components/views/SurveyInstalasiView';
+import { RequestGudangInstalasiView } from './components/views/RequestGudangInstalasiView';
+import { AktivasiInstalasiView } from './components/views/AktivasiInstalasiView';
 
 // Modals
 import { NewTicketModal } from './components/modals/NewTicketModal';
@@ -40,7 +54,7 @@ import { LoginPage } from './components/auth/LoginPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { getResolvedAllowedModules, getRoleWorkspace } from './config/roleWorkspace';
+import { getDashboardModuleForRole, getResolvedAllowedModules, getRoleWorkspace } from './config/roleWorkspace';
 import { getDefaultRouteForRole, getRoutePathForModule } from './routing/moduleRoutes';
 
 const FullScreenLoader: React.FC<{ label: string }> = ({ label }) => (
@@ -89,6 +103,7 @@ const MainIOMSApp: React.FC = () => {
   const {
     selectedModule,
     activeRole,
+    currentUser,
     navigationConfig,
   } = useIOMS();
   const location = useLocation();
@@ -104,11 +119,13 @@ const MainIOMSApp: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const roleWorkspace = getRoleWorkspace(activeRole);
   const allowedModules = getResolvedAllowedModules(activeRole, navigationConfig);
-  const activeModule = allowedModules.includes(selectedModule)
+  const preferredHomeModule = getDashboardModuleForRole(activeRole, currentUser.dashboardModuleKey);
+  const activeModule = activeRole === 'superadmin'
     ? selectedModule
-    : (allowedModules.includes(roleWorkspace.defaultModule) ? roleWorkspace.defaultModule : allowedModules[0] ?? roleWorkspace.defaultModule);
-  const fallbackRoute = getDefaultRouteForRole(activeRole, navigationConfig);
-  const showSearchBar = roleWorkspace.shellMode === 'compact';
+    : allowedModules.includes(selectedModule) || selectedModule === preferredHomeModule
+    ? selectedModule
+    : (allowedModules.includes(preferredHomeModule) ? preferredHomeModule : allowedModules[0] ?? preferredHomeModule);
+  const fallbackRoute = getDefaultRouteForRole(activeRole, currentUser.dashboardModuleKey, navigationConfig);
   const showFooter = roleWorkspace.shellMode !== 'standalone';
   const canOpenSidebar = roleWorkspace.showSidebarNavigation && allowedModules.length > 1;
 
@@ -126,6 +143,42 @@ const MainIOMSApp: React.FC = () => {
         return activeRole === 'superadmin'
           ? <SuperadminDashboardView selectedModule={activeModule} />
           : <ManagementDashboardView />;
+      case 'about':
+        return <AboutView />;
+      case 'pelanggan':
+        return <PelangganView />;
+      case 'penagihan':
+        return <PenagihanView />;
+      case 'request_pppoe_noc':
+        return <RequestPppoeNocView />;
+      case 'request_rembes':
+        return <RequestRembesView />;
+      case 'approval_rembes_finance':
+        return <ApprovalRembesFinanceView />;
+      case 'laporan_keuangan':
+        return <LaporanKeuanganView />;
+      case 'retur_gudang_perangkat':
+        return <ReturGudangPerangkatView />;
+      case 'panel_kepala_teknisi':
+      case 'lead_tech':
+        return <PanelKepalaTeknisiView />;
+      case 'panel_teknisi_lapangan':
+      case 'field_tech':
+        return <PanelTeknisiLapanganView />;
+      case 'pengerjaan_instalasi_lapangan':
+        return <PengerjaanInstalasiLapanganView />;
+      case 'qc_instalasi_noc':
+        return <QCInstalasiNocView />;
+      case 'registrasi_pelanggan_baru':
+        return <RegistrasiPelangganBaruView />;
+      case 'validasi_registrasi':
+        return <ValidasiRegistrasiView />;
+      case 'survey_instalasi':
+        return <SurveyInstalasiView />;
+      case 'request_gudang_instalasi':
+        return <RequestGudangInstalasiView />;
+      case 'aktivasi_instalasi':
+        return <AktivasiInstalasiView />;
       case 'service_registrations':
         return <ServiceRegistrationsView onOpenNewRegistration={() => setIsCustomerModalOpen(true)} />;
       case 'helpdesk':
@@ -141,10 +194,6 @@ const MainIOMSApp: React.FC = () => {
             onSelectTicket={(ticket) => setSelectedTicketDetail(ticket)}
           />
         );
-      case 'lead_tech':
-        return <LeadTechDashboardView />;
-      case 'field_tech':
-        return <FieldTechMobileView />;
       case 'finance':
         return <FinanceBillingView />;
       case 'inventory':
@@ -206,15 +255,6 @@ const MainIOMSApp: React.FC = () => {
       <main className={`flex-1 w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-4 ${
         roleWorkspace.shellMode === 'standalone' ? 'max-w-[1440px]' : 'max-w-7xl'
       }`}>
-        {showSearchBar && (
-          <SearchAndFilterBar
-            onOpenNewTicket={() => setIsTicketModalOpen(true)}
-            onOpenNewCustomer={() => setIsCustomerModalOpen(true)}
-            onOpenNewTask={() => setIsTaskModalOpen(true)}
-            onOpenNewProcurement={() => setIsProcurementModalOpen(true)}
-          />
-        )}
-
         <div className="transition-all duration-200">
           {renderModuleView(activeModule)}
         </div>
@@ -222,7 +262,7 @@ const MainIOMSApp: React.FC = () => {
 
       {showFooter && (
         <footer className="bg-white border-t border-slate-200 py-3 px-6 mt-auto">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-slate-500 gap-2">
             <div className="flex items-center space-x-3">
               <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -230,21 +270,6 @@ const MainIOMSApp: React.FC = () => {
               </span>
               <span className="text-slate-300">|</span>
               <span>Versi 1.0 Production</span>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setIsWorkflowGuideOpen(true)}
-                className="text-slate-600 hover:text-emerald-700 font-medium transition-colors cursor-pointer"
-              >
-                Panduan 6 Alur Kerja
-              </button>
-              <button
-                onClick={() => setIsArchSpecsModalOpen(true)}
-                className="text-slate-600 hover:text-emerald-700 font-medium transition-colors cursor-pointer"
-              >
-                Spesifikasi Backend
-              </button>
             </div>
           </div>
         </footer>
@@ -294,6 +319,22 @@ export default function App() {
             <Route path="/" element={<Navigate to="/app" replace />} />
             <Route path="/app" element={<MainIOMSApp />} />
             <Route path="/app/dashboard" element={<MainIOMSApp />} />
+            <Route path="/app/about" element={<MainIOMSApp />} />
+            <Route path="/app/pelanggan" element={<MainIOMSApp />} />
+            <Route path="/app/penagihan" element={<MainIOMSApp />} />
+            <Route path="/app/request-pppoe-noc" element={<MainIOMSApp />} />
+            <Route path="/app/request-rembes" element={<MainIOMSApp />} />
+            <Route path="/app/approval-rembes-finance" element={<MainIOMSApp />} />
+            <Route path="/app/laporan-keuangan" element={<MainIOMSApp />} />
+            <Route path="/app/panel-kepala-teknisi" element={<MainIOMSApp />} />
+            <Route path="/app/panel-teknisi-lapangan" element={<MainIOMSApp />} />
+            <Route path="/app/pengerjaan-instalasi-lapangan" element={<MainIOMSApp />} />
+            <Route path="/app/qc-instalasi-noc" element={<MainIOMSApp />} />
+            <Route path="/app/registrasi-pelanggan-baru" element={<MainIOMSApp />} />
+            <Route path="/app/validasi-registrasi" element={<MainIOMSApp />} />
+            <Route path="/app/survey-instalasi" element={<MainIOMSApp />} />
+            <Route path="/app/request-gudang-instalasi" element={<MainIOMSApp />} />
+            <Route path="/app/aktivasi-instalasi" element={<MainIOMSApp />} />
             <Route path="/app/service-registrations" element={<MainIOMSApp />} />
             <Route path="/app/helpdesk" element={<MainIOMSApp />} />
             <Route path="/app/noc" element={<MainIOMSApp />} />

@@ -65,11 +65,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const authFetch = async <T,>(path: string, init?: RequestInit): Promise<T> => {
     const currentToken = token ?? window.localStorage.getItem(TOKEN_KEY);
+    const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers: {
         'Accept': 'application/json',
-        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...(currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {}),
         ...(init?.headers ?? {}),
       },
@@ -83,8 +84,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!response.ok) {
       let message = 'Terjadi kesalahan pada server.';
       try {
-        const payload = await response.json() as { message?: string };
-        if (payload.message) {
+        const payload = await response.json() as { message?: string; errors?: Record<string, string[]> };
+        if (payload.errors && Object.keys(payload.errors).length > 0) {
+          const firstError = Object.values(payload.errors).flat().find(Boolean);
+          message = firstError ?? payload.message ?? message;
+        } else if (payload.message) {
           message = payload.message;
         }
       } catch {

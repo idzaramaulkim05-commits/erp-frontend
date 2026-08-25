@@ -5,22 +5,41 @@ import {
   CheckCircle2,
   ChevronRight,
   HelpCircle,
+  Layers3,
   MapPin,
+  MessageCircle,
   Phone,
-  Radio,
   User,
-  Wrench,
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
-import { TicketStatus, TroubleTicket } from '../../types';
-import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
+import { ExtendedTicketStatus, TroubleTicket } from '../../types';
+import { WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
+import { NotesActionModal } from '../modals/NotesActionModal';
 
 interface HelpdeskViewProps {
   onOpenNewTicket: () => void;
   onSelectTicket: (ticket: TroubleTicket) => void;
 }
 
-const getStatusMeta = (status: TicketStatus): { label: string; tone: 'emerald' | 'amber' | 'rose' | 'sky' | 'violet' | 'slate' } => {
+const normalizeWhatsAppNumber = (phone?: string | null) => {
+  const digits = (phone ?? '').replace(/\D/g, '');
+
+  if (!digits) {
+    return null;
+  }
+
+  if (digits.startsWith('62') && digits.length >= 10) {
+    return digits;
+  }
+
+  if (digits.startsWith('0') && digits.length >= 10) {
+    return `62${digits.slice(1)}`;
+  }
+
+  return null;
+};
+
+const getStatusMeta = (status: ExtendedTicketStatus): { label: string; tone: 'emerald' | 'amber' | 'rose' | 'sky' | 'violet' | 'slate' } => {
   switch (status) {
     case 'open':
     case 'in_noc_review':
@@ -29,6 +48,10 @@ const getStatusMeta = (status: TicketStatus): { label: string; tone: 'emerald' |
       return { label: '2. Dispatched WO', tone: 'sky' };
     case 'field_progress':
       return { label: '3. Teknisi Lapangan', tone: 'sky' };
+    case 'field_done_waiting_helpdesk_qc':
+      return { label: '4. QC Helpdesk', tone: 'violet' };
+    case 'menunggu_retur_gudang':
+      return { label: '5. Menunggu Retur Gudang', tone: 'amber' };
     case 'lead_sop_approved':
       return { label: '4. SOP Approved', tone: 'violet' };
     case 'noc_verifying':
@@ -62,19 +85,23 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
     searchQuery,
     selectedRegion,
     selectedOdpFilter,
-    resolveTicketRemotely,
-    escalateTicketToLeadTech,
+    helpdeskCloseTicket,
   } = useIOMS();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'open' | 'in_progress' | 'closed'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'open' | 'in_progress' | 'qc' | 'closed'>('all');
+  const [qcTargetTicket, setQcTargetTicket] = useState<TroubleTicket | null>(null);
+  const [qcNotes, setQcNotes] = useState('');
+  const [qcSaving, setQcSaving] = useState(false);
 
   const openQueueCount = tickets.filter((ticket) => ticket.status === 'open' || ticket.status === 'in_noc_review').length;
-  const inProgressCount = tickets.filter((ticket) => ticket.status !== 'open' && ticket.status !== 'in_noc_review' && ticket.status !== 'closed').length;
+  const inProgressCount = tickets.filter((ticket) => ['assigned_to_lead', 'field_progress', 'menunggu_retur_gudang'].includes(ticket.status)).length;
+  const qcCount = tickets.filter((ticket) => ticket.status === 'field_done_waiting_helpdesk_qc').length;
   const closedCount = tickets.filter((ticket) => ticket.status === 'closed').length;
 
   const filteredTickets = tickets.filter((ticket) => {
     if (activeTab === 'open' && ticket.status !== 'open' && ticket.status !== 'in_noc_review') return false;
-    if (activeTab === 'in_progress' && (ticket.status === 'open' || ticket.status === 'in_noc_review' || ticket.status === 'closed')) return false;
+    if (activeTab === 'in_progress' && !['assigned_to_lead', 'field_progress', 'menunggu_retur_gudang'].includes(ticket.status)) return false;
+    if (activeTab === 'qc' && ticket.status !== 'field_done_waiting_helpdesk_qc') return false;
     if (activeTab === 'closed' && ticket.status !== 'closed') return false;
 
     if (selectedRegion !== 'all' && ticket.region !== selectedRegion) return false;
@@ -96,43 +123,100 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
     return true;
   });
 
+  const openQcModal = (ticket: TroubleTicket) => {
+    setQcTargetTicket(ticket);
+    setQcNotes('Koneksi pelanggan normal kembali dan pekerjaan dinyatakan selesai.');
+  };
+
+  const closeQcModal = () => {
+    if (qcSaving) return;
+    setQcTargetTicket(null);
+    setQcNotes('');
+  };
+
+  const submitHelpdeskQc = async () => {
+    if (!qcTargetTicket || !qcNotes.trim()) {
+      return;
+    }
+
+    setQcSaving(true);
+    try {
+      await Promise.resolve(helpdeskCloseTicket(qcTargetTicket.id, qcNotes.trim(), true));
+      closeQcModal();
+    } finally {
+      setQcSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <WorkspaceOpsHero
-        eyebrow="Helpdesk Operations"
-        title="Intake aduan pelanggan, pemantauan alur tiket, dan handoff ke NOC atau teknisi"
-        subtitle="Workspace utama helpdesk untuk menerima gangguan, menjaga kejelasan status tiket, dan memastikan tindak lanjut menuju NOC review atau dispatch work order."
-        stats={[
-          {
-            label: 'Total Tiket',
-            value: tickets.length,
-            description: 'Semua tiket gangguan dan permintaan layanan yang tercatat.',
-            icon: HelpCircle,
-            accentClass: 'bg-sky-400/15 text-sky-200',
-          },
-          {
-            label: 'Menunggu NOC',
-            value: openQueueCount,
-            description: 'Tiket baru atau antrean yang masih menunggu review teknis NOC.',
-            icon: AlertTriangle,
-            accentClass: 'bg-amber-400/15 text-amber-200',
-          },
-          {
-            label: 'Diproses',
-            value: inProgressCount,
-            description: 'Tiket yang sudah masuk tahap dispatch, lapangan, atau final verification.',
-            icon: Activity,
-            accentClass: 'bg-violet-400/15 text-violet-200',
-          },
-          {
-            label: 'Closed',
-            value: closedCount,
-            description: 'Tiket yang sudah selesai ditangani dan ditutup.',
-            icon: CheckCircle2,
-            accentClass: 'bg-emerald-400/15 text-emerald-200',
-          },
-        ]}
-      />
+      <section className="rounded-[28px] border border-slate-200 bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-[0_18px_40px_rgba(15,23,42,0.14)]">
+        <div className="flex flex-col gap-4">
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">
+              <Layers3 className="h-3.5 w-3.5" />
+              Helpdesk Operations
+            </span>
+            <div className="flex flex-col gap-1 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h1 className="text-xl font-black tracking-tight sm:text-2xl">Ringkasan tiket helpdesk</h1>
+                <p className="text-sm text-slate-300">Pantau antrean, progres lapangan, dan QC akhir dalam satu panel ringkas.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              {
+                label: 'Total',
+                value: tickets.length,
+                icon: HelpCircle,
+                accentClass: 'bg-sky-400/15 text-sky-200',
+              },
+              {
+                label: 'NOC',
+                value: openQueueCount,
+                icon: AlertTriangle,
+                accentClass: 'bg-amber-400/15 text-amber-200',
+              },
+              {
+                label: 'Proses',
+                value: inProgressCount,
+                icon: Activity,
+                accentClass: 'bg-violet-400/15 text-violet-200',
+              },
+              {
+                label: 'QC',
+                value: qcCount,
+                icon: CheckCircle2,
+                accentClass: 'bg-fuchsia-400/15 text-fuchsia-200',
+              },
+              {
+                label: 'Closed',
+                value: closedCount,
+                icon: CheckCircle2,
+                accentClass: 'bg-emerald-400/15 text-emerald-200',
+              },
+            ].map((stat) => {
+              const Icon = stat.icon;
+
+              return (
+                <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3 backdrop-blur-xs">
+                  <div className={`inline-flex rounded-xl p-2 ${stat.accentClass}`}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{stat.label}</p>
+                      <p className="mt-1 text-2xl font-black text-white">{stat.value}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -166,6 +250,15 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('qc')}
+              className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
+                activeTab === 'qc' ? 'bg-fuchsia-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              QC Helpdesk ({qcCount})
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('closed')}
               className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
                 activeTab === 'closed' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -189,13 +282,6 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
       <WorkspaceSectionShell
         eyebrow="Ticket Worklist"
         title="Daftar tiket gangguan dan permintaan pelanggan"
-        subtitle="Filter global tetap mengikuti search, wilayah, dan ODP dari shell. Area ini fokus pada detail tiket dan tindakan helpdesk yang paling sering dipakai."
-        badge={`${filteredTickets.length} tiket terlihat`}
-        actions={
-          <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 lg:inline-flex">
-            Alur: Helpdesk {'->'} NOC Review {'->'} Kepala Teknisi WO {'->'} Teknisi Lapangan {'->'} NOC Closing
-          </span>
-        }
       >
         {filteredTickets.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
@@ -208,7 +294,8 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
             {filteredTickets.map((ticket) => {
               const statusMeta = getStatusMeta(ticket.status);
               const categoryMeta = getCategoryMeta(ticket.category);
-              const canQuickHandle = ticket.status === 'open' || ticket.status === 'in_noc_review';
+              const canHelpdeskQc = ticket.status === 'field_done_waiting_helpdesk_qc';
+              const whatsappNumber = normalizeWhatsAppNumber(ticket.customerPhone);
 
               return (
                 <div key={ticket.id} className="p-5 transition-colors hover:bg-slate-50/70">
@@ -238,10 +325,26 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-3 text-xs">
                           <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Kontak</span>
-                          <span className="mt-1 flex items-center gap-1 font-semibold text-slate-800">
-                            <Phone className="h-3.5 w-3.5 text-slate-400" />
-                            {ticket.customerPhone}
-                          </span>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-1 font-semibold text-slate-800">
+                              <Phone className="h-3.5 w-3.5 text-slate-400" />
+                              {ticket.customerPhone}
+                            </span>
+                            <a
+                              href={whatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-disabled={!whatsappNumber}
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${
+                                whatsappNumber
+                                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                  : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                              }`}
+                              title={whatsappNumber ? 'Hubungi via WhatsApp' : 'Nomor WhatsApp belum valid'}
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                            </a>
+                          </div>
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-3 text-xs">
                           <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">ODP & Wilayah</span>
@@ -256,40 +359,16 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
                     <div className="w-full shrink-0 rounded-[24px] border border-slate-200 bg-slate-50 p-4 xl:w-80">
                       <p className="text-sm font-black text-slate-950">Aksi Helpdesk</p>
                       <div className="mt-4 space-y-2">
-                        {canQuickHandle && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const note = prompt(
-                                  'Catatan penyelesaian remote NOC (misal: Reset PPPoE / Ubah Port OMCI):',
-                                  'Selesai remote konfigurasi OMCI / Mikrotik.',
-                                );
-                                if (note) resolveTicketRemotely(ticket.id, note);
-                              }}
-                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
-                              title="Selesaikan secara remote via NOC tanpa kirim teknisi lapangan"
-                            >
-                              <Radio className="h-3.5 w-3.5" />
-                              Remote Fix (NOC)
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const note = prompt(
-                                  'Catatan kendala fisik untuk Kepala Teknisi:',
-                                  'Kabel FO putus / redaman drop -38dBm. Mohon dispatch teknisi.',
-                                );
-                                if (note) escalateTicketToLeadTech(ticket.id, note);
-                              }}
-                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-sky-700"
-                              title="Terbitkan WO ke Kepala Teknisi untuk perbaikan fisik"
-                            >
-                              <Wrench className="h-3.5 w-3.5" />
-                              Teruskan ke Teknisi (WO)
-                            </button>
-                          </>
+                        {canHelpdeskQc && (
+                          <button
+                            type="button"
+                            onClick={() => openQcModal(ticket)}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-fuchsia-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-fuchsia-700"
+                            title="Tutup tiket final setelah QC helpdesk selesai"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            QC Helpdesk & Close
+                          </button>
                         )}
 
                         <button
@@ -309,6 +388,27 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
           </div>
         )}
       </WorkspaceSectionShell>
+
+      <NotesActionModal
+        open={qcTargetTicket !== null}
+        title="Konfirmasi QC Akhir Helpdesk"
+        message={
+          qcTargetTicket
+            ? `Tiket ${qcTargetTicket.id} untuk ${qcTargetTicket.customerName} akan ditutup final setelah QC Helpdesk selesai.`
+            : ''
+        }
+        label="Catatan QC Akhir Helpdesk"
+        value={qcNotes}
+        onChange={setQcNotes}
+        placeholder="Jelaskan hasil verifikasi akhir helpdesk, kondisi koneksi pelanggan, dan konfirmasi penyelesaian."
+        confirmLabel="Ya, Close Ticket"
+        tone="success"
+        loading={qcSaving}
+        onCancel={closeQcModal}
+        onConfirm={() => {
+          void submitHelpdeskQc();
+        }}
+      />
     </div>
   );
 };

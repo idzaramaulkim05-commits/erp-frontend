@@ -28,7 +28,12 @@ const getWorkOrderStatusLabel = (status: WorkOrder['status']) => {
     case 'assigned':
       return 'Siap Dikerjakan';
     case 'in_progress':
+    case 'sedang_diinstal':
       return 'Sedang Dikerjakan';
+    case 'dikembalikan_ke_teknisi':
+      return 'Revisi dari NOC';
+    case 'menunggu_qc_noc':
+      return 'Menunggu QC NOC';
     case 'sop_submitted':
       return 'Menunggu Review Lead';
     case 'field_submitted':
@@ -38,6 +43,7 @@ const getWorkOrderStatusLabel = (status: WorkOrder['status']) => {
     case 'approved':
       return 'Disetujui';
     case 'completed':
+    case 'closed':
       return 'Selesai';
     default:
       return status;
@@ -52,7 +58,12 @@ const getWorkOrderStatusTone = (status: WorkOrder['status']) => {
     case 'assigned':
       return 'bg-sky-100 text-sky-800 border border-sky-200';
     case 'in_progress':
+    case 'sedang_diinstal':
       return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    case 'dikembalikan_ke_teknisi':
+      return 'bg-rose-100 text-rose-800 border border-rose-200';
+    case 'menunggu_qc_noc':
+      return 'bg-violet-100 text-violet-800 border border-violet-200';
     case 'waiting_noc_activation':
       return 'bg-violet-100 text-violet-800 border border-violet-200';
     default:

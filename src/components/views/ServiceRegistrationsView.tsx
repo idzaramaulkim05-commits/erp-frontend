@@ -21,6 +21,7 @@ import {
   PipelineStageItem,
   ServiceRegistration,
   ServiceRegistrationStatus,
+  TroubleTicket,
   UserRole,
   WorkOrder,
 } from '../../types';
@@ -31,13 +32,30 @@ import {
   PipelineSectionGrid,
   PipelineStageBoard,
 } from '../pipeline/PipelineWidgets';
+import { NotesActionModal } from '../modals/NotesActionModal';
 
 interface ServiceRegistrationsViewProps {
   onOpenNewRegistration?: () => void;
 }
 
+type NocTicketAction = 'remote_resolve' | 'escalate';
+
+const matchesTicketSearch = (ticket: TroubleTicket, query: string) =>
+  `${ticket.id} ${ticket.title} ${ticket.description} ${ticket.customerName} ${ticket.customerId} ${ticket.customerPhone} ${ticket.odpId} ${ticket.region}`
+    .toLowerCase()
+    .includes(query.toLowerCase());
+
 const statusLabels: Record<ServiceRegistrationStatus, string> = {
   draft: 'Draft',
+  menunggu_validasi: 'Menunggu Validasi',
+  perlu_perbaikan_data: 'Perlu Perbaikan Data',
+  menunggu_survey: 'Menunggu Survey',
+  survey_layak: 'Survey Layak',
+  survey_tidak_layak: 'Survey Tidak Layak',
+  siap_wo_instalasi: 'Siap WO Instalasi',
+  sedang_diinstal: 'Sedang Diinstal',
+  menunggu_qc_noc: 'Menunggu QC NOC',
+  selesai: 'Selesai',
   submitted: 'Submitted',
   pending_finance: 'Menunggu Finance',
   finance_approved: 'Finance Approved',
@@ -283,11 +301,17 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
     nocRejectServiceRegistration,
     createInstallationWorkOrderFromRegistration,
     nocFinalVerifyInstallation,
+    resolveTicketRemotely,
+    escalateTicketToLeadTech,
   } = useIOMS();
 
   const [selectedTech, setSelectedTech] = useState<Record<string, string>>({});
   const [localStatusFilter, setLocalStatusFilter] = useState<'all' | ServiceRegistrationStatus>('all');
   const [selectedStageFilter, setSelectedStageFilter] = useState<string>('all');
+  const [ticketActionTarget, setTicketActionTarget] = useState<{ ticket: TroubleTicket; action: NocTicketAction } | null>(null);
+  const [ticketActionNotes, setTicketActionNotes] = useState('');
+  const [ticketNeedsReplacement, setTicketNeedsReplacement] = useState(false);
+  const [ticketActionSaving, setTicketActionSaving] = useState(false);
 
   const linkedWorkOrders = useMemo(
     () =>
@@ -351,6 +375,34 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
   const fieldTechs = users.filter((user) => user.role === 'field_tech');
   const summaryStats = useMemo(() => getSummaryStats(activeRole, scopedRegistrations, linkedWorkOrders), [activeRole, scopedRegistrations, linkedWorkOrders]);
 
+  const searchedTickets = useMemo(() => {
+    if (activeRole !== 'noc') {
+      return [] as TroubleTicket[];
+    }
+
+    if (!searchQuery.trim()) {
+      return tickets;
+    }
+
+    return tickets.filter((ticket) => matchesTicketSearch(ticket, searchQuery));
+  }, [activeRole, searchQuery, tickets]);
+
+  const nocTriageTickets = useMemo(
+    () => searchedTickets.filter((ticket) => ticket.status === 'open' || ticket.status === 'in_noc_review'),
+    [searchedTickets],
+  );
+
+  const nocMonitoringTickets = useMemo(
+    () => searchedTickets.filter((ticket) => ['assigned_to_lead', 'field_progress', 'field_done_waiting_helpdesk_qc'].includes(ticket.status)),
+    [searchedTickets],
+  );
+
+  const nocTicketMetrics = useMemo(() => ({
+    triage: tickets.filter((ticket) => ticket.status === 'open' || ticket.status === 'in_noc_review').length,
+    escalated: tickets.filter((ticket) => ticket.status === 'assigned_to_lead' || ticket.status === 'field_progress').length,
+    remoteDone: tickets.filter((ticket) => ticket.status === 'field_done_waiting_helpdesk_qc').length,
+  }), [tickets]);
+
   const secondaryMetrics = useMemo(() => ({
     finance: {
       unpaidCustomers: customers.filter((customer) => customer.billingStatus === 'unpaid').length,
@@ -358,8 +410,9 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
       pendingProcurement: procurementRequests.filter((request) => request.status === 'pending_finance').length,
     },
     noc: {
-      pendingReview: tickets.filter((ticket) => ticket.status === 'in_noc_review').length,
-      readyToClose: tickets.filter((ticket) => ticket.status === 'lead_sop_approved').length,
+      pendingReview: tickets.filter((ticket) => ticket.status === 'open' || ticket.status === 'in_noc_review').length,
+      escalated: tickets.filter((ticket) => ticket.status === 'assigned_to_lead' || ticket.status === 'field_progress').length,
+      remoteDone: tickets.filter((ticket) => ticket.status === 'field_done_waiting_helpdesk_qc').length,
       lowSignal: customers.filter((customer) => customer.opticalPowerDbm < -25).length,
     },
     lead: {
@@ -384,6 +437,45 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
       rxPowerThresholdPassed: true,
       notes: 'Aktivasi pasang baru diverifikasi NOC. Redaman dan sesi PPPoE normal.',
     });
+  };
+
+  const openTicketActionModal = (ticket: TroubleTicket, action: NocTicketAction) => {
+    setTicketActionTarget({ ticket, action });
+    setTicketNeedsReplacement(false);
+    setTicketActionNotes(
+      action === 'remote_resolve'
+        ? 'Konfigurasi OMCI selesai di-apply dan pelanggan kembali online.'
+        : 'Kabel FO drop wire putus di tiang PLN dan perlu kunjungan teknisi.',
+    );
+  };
+
+  const closeTicketActionModal = () => {
+    if (ticketActionSaving) return;
+    setTicketActionTarget(null);
+    setTicketActionNotes('');
+    setTicketNeedsReplacement(false);
+  };
+
+  const submitTicketAction = async () => {
+    if (!ticketActionTarget || !ticketActionNotes.trim()) {
+      return;
+    }
+
+    setTicketActionSaving(true);
+    try {
+      if (ticketActionTarget.action === 'remote_resolve') {
+        await Promise.resolve(resolveTicketRemotely(ticketActionTarget.ticket.id, ticketActionNotes.trim()));
+      } else {
+        await Promise.resolve(
+          escalateTicketToLeadTech(ticketActionTarget.ticket.id, ticketActionNotes.trim(), {
+            requiresReplacementRequest: ticketNeedsReplacement,
+          }),
+        );
+      }
+      closeTicketActionModal();
+    } finally {
+      setTicketActionSaving(false);
+    }
   };
 
   const renderActionSlot = (registration: ServiceRegistration) => {
@@ -631,6 +723,145 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
     return <span className="text-xs font-semibold text-slate-500">Tidak ada aksi</span>;
   };
 
+  const renderNocTicketSection = () => {
+    if (activeRole !== 'noc') {
+      return null;
+    }
+
+    return (
+      <PipelineSecondarySection
+        title="Tiket Gangguan / NOC Triage"
+        description="Dashboard NOC tetap berada di pipeline registrasi, dan antrean gangguan aktif ditampilkan di sini agar NOC tidak perlu pindah modul untuk melihat tiket baru."
+        ctaLabel="Buka NOC Console"
+        onCtaClick={() => setSelectedModule('noc')}
+        icon={Network}
+      >
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Menunggu Triage</p>
+            <p className="mt-2 text-3xl font-black text-amber-700">{nocTicketMetrics.triage}</p>
+            <p className="mt-1 text-xs text-slate-500">Tiket baru yang perlu pengecekan remote NOC.</p>
+          </div>
+          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Diteruskan ke Lapangan</p>
+            <p className="mt-2 text-3xl font-black text-sky-700">{nocTicketMetrics.escalated}</p>
+            <p className="mt-1 text-xs text-slate-500">Tiket yang sudah menjadi WO maintenance dan dipantau progresnya.</p>
+          </div>
+          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Selesai Remote</p>
+            <p className="mt-2 text-3xl font-black text-emerald-700">{nocTicketMetrics.remoteDone}</p>
+            <p className="mt-1 text-xs text-slate-500">Tiket yang sudah selesai dari sisi NOC dan menunggu QC Helpdesk.</p>
+          </div>
+          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Redaman Kritis</p>
+            <p className="mt-2 text-3xl font-black text-rose-700">{secondaryMetrics.noc.lowSignal}</p>
+            <p className="mt-1 text-xs text-slate-500">Pelanggan existing dengan optical power di bawah batas aman.</p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[24px] border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-3">
+              <p className="text-sm font-black text-slate-950">Antrean Triage Aktif</p>
+              <p className="mt-1 text-xs text-slate-500">Tiket baru dari Helpdesk yang bisa diselesaikan remote atau perlu diteruskan ke Kepala Teknisi.</p>
+            </div>
+
+            {nocTriageTickets.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-slate-500">
+                Tidak ada tiket triage aktif pada filter saat ini.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {nocTriageTickets.map((ticket) => (
+                  <div key={ticket.id} className="px-4 py-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white">
+                        {ticket.id}
+                      </span>
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">
+                        {ticket.status === 'open' ? 'Open' : 'In NOC Review'}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                        {ticket.customerName}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">{ticket.title}</p>
+                    <p className="mt-1 text-sm text-slate-500">{ticket.description}</p>
+                    <p className="mt-2 text-xs text-slate-500">{ticket.odpId} • {ticket.region} • {ticket.customerPhone}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openTicketActionModal(ticket, 'remote_resolve')}
+                        className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                      >
+                        Selesaikan Remote ke Helpdesk QC
+                      </button>
+                        <button
+                          type="button"
+                          onClick={() => openTicketActionModal(ticket, 'escalate')}
+                        className="rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white hover:bg-sky-700"
+                      >
+                          Kirim WO ke Kepala Teknisi
+                        </button>
+                        {ticket.replacementContext?.requiresReplacementRequest ? (
+                          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
+                            Ticket ini sudah ditandai membutuhkan pergantian perangkat.
+                          </div>
+                        ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[24px] border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-3">
+              <p className="text-sm font-black text-slate-950">Monitoring Tiket Gangguan</p>
+              <p className="mt-1 text-xs text-slate-500">Tiket yang sudah masuk lapangan atau sudah selesai remote sebagai referensi status operasional.</p>
+            </div>
+
+            {nocMonitoringTickets.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-slate-500">
+                Belum ada tiket gangguan pada status monitoring.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {nocMonitoringTickets.map((ticket) => (
+                  <div key={ticket.id} className="px-4 py-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white">
+                        {ticket.id}
+                      </span>
+                      <span
+                        className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${
+                          ticket.status === 'field_done_waiting_helpdesk_qc'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-sky-100 text-sky-700'
+                        }`}
+                      >
+                        {ticket.status === 'assigned_to_lead'
+                          ? 'Menunggu Kepala Teknisi'
+                          : ticket.status === 'field_progress'
+                          ? 'Sedang di Lapangan'
+                          : 'Menunggu QC Helpdesk'}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">{ticket.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{ticket.customerName} • {ticket.region}</p>
+                    {ticket.nocDiagnosticNotes && (
+                      <p className="mt-2 text-xs text-slate-600">Catatan NOC: {ticket.nocDiagnosticNotes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </PipelineSecondarySection>
+    );
+  };
+
   const renderSecondarySection = () => {
     if (activeRole === 'finance') {
       return (
@@ -665,8 +896,8 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
     if (activeRole === 'noc') {
       return (
         <PipelineSecondarySection
-          title="Gangguan Operasional & Ticket NOC"
-          description="Pipeline pasang baru tetap menjadi home, sementara tiket gangguan lama tetap terlihat sebagai panel pendukung."
+          title="NOC Console Sekunder"
+          description="Modul NOC tetap tersedia sebagai console teknis sekunder, tetapi dashboard utama untuk role NOC tetap berada di pipeline registrasi ini."
           ctaLabel="Buka NOC Console"
           onCtaClick={() => setSelectedModule('noc')}
           icon={Network}
@@ -675,17 +906,17 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Review NOC</p>
               <p className="mt-2 text-3xl font-black text-amber-700">{secondaryMetrics.noc.pendingReview}</p>
-              <p className="mt-1 text-xs text-slate-500">Ticket gangguan yang masih perlu triage NOC.</p>
+              <p className="mt-1 text-xs text-slate-500">Ticket gangguan yang masih perlu triage NOC di dashboard utama ini.</p>
             </div>
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Siap Closing</p>
-              <p className="mt-2 text-3xl font-black text-emerald-700">{secondaryMetrics.noc.readyToClose}</p>
-              <p className="mt-1 text-xs text-slate-500">Ticket gangguan yang sudah lolos SOP dan menunggu close.</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Ke Lapangan</p>
+              <p className="mt-2 text-3xl font-black text-emerald-700">{secondaryMetrics.noc.escalated}</p>
+              <p className="mt-1 text-xs text-slate-500">Ticket gangguan yang sudah diteruskan menjadi WO maintenance.</p>
             </div>
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Redaman Kritis</p>
-              <p className="mt-2 text-3xl font-black text-rose-700">{secondaryMetrics.noc.lowSignal}</p>
-              <p className="mt-1 text-xs text-slate-500">Pelanggan existing dengan optical power di bawah batas aman.</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Remote Selesai</p>
+              <p className="mt-2 text-3xl font-black text-rose-700">{secondaryMetrics.noc.remoteDone}</p>
+              <p className="mt-1 text-xs text-slate-500">Ticket yang sudah selesai dari sisi NOC dan menunggu QC Helpdesk.</p>
             </div>
           </div>
         </PipelineSecondarySection>
@@ -740,6 +971,8 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
         activeFilter={selectedStageFilter}
         onSelect={setSelectedStageFilter}
       />
+
+      {renderNocTicketSection()}
 
       <div className="flex flex-wrap items-center gap-2 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
@@ -853,6 +1086,51 @@ export const ServiceRegistrationsView: React.FC<ServiceRegistrationsViewProps> =
       </section>
 
       {renderSecondarySection()}
+
+      <NotesActionModal
+        open={ticketActionTarget !== null}
+        title={
+          ticketActionTarget?.action === 'remote_resolve'
+            ? 'Konfirmasi Penyelesaian Remote NOC'
+            : 'Konfirmasi Eskalasi ke Kepala Teknisi'
+        }
+        message={
+          ticketActionTarget
+            ? ticketActionTarget.action === 'remote_resolve'
+              ? `Tiket ${ticketActionTarget.ticket.id} untuk ${ticketActionTarget.ticket.customerName} akan diselesaikan dari sisi NOC dan dikembalikan ke QC Helpdesk.`
+              : `Tiket ${ticketActionTarget.ticket.id} untuk ${ticketActionTarget.ticket.customerName} akan diteruskan menjadi WO maintenance ke Kepala Teknisi.`
+            : ''
+        }
+        label={ticketActionTarget?.action === 'remote_resolve' ? 'Catatan Perbaikan Remote NOC' : 'Catatan Kendala Fisik / Eskalasi'}
+        value={ticketActionNotes}
+        onChange={setTicketActionNotes}
+        placeholder={
+          ticketActionTarget?.action === 'remote_resolve'
+            ? 'Jelaskan tindakan remote yang dilakukan dan hasil koneksi pelanggan.'
+            : 'Jelaskan penyebab eskalasi lapangan, indikasi gangguan fisik, atau kebutuhan kunjungan teknisi.'
+        }
+        confirmLabel={ticketActionTarget?.action === 'remote_resolve' ? 'Ya, Selesaikan Remote' : 'Ya, Kirim ke Kepala Teknisi'}
+        tone={ticketActionTarget?.action === 'remote_resolve' ? 'success' : 'warning'}
+        loading={ticketActionSaving}
+        onCancel={closeTicketActionModal}
+        onConfirm={() => {
+          void submitTicketAction();
+        }}
+      >
+        {ticketActionTarget?.action === 'escalate' ? (
+          <label className="flex items-start gap-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={ticketNeedsReplacement}
+              onChange={(event) => setTicketNeedsReplacement(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200"
+            />
+            <span>
+              Tandai bahwa gangguan ini membutuhkan pergantian alat. Jika dicentang, sistem akan otomatis membuat request alat maintenance ke gudang dengan paket default replacement.
+            </span>
+          </label>
+        ) : null}
+      </NotesActionModal>
     </div>
   );
 };

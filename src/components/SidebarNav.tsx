@@ -1,27 +1,31 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  Activity,
+  BadgeInfo,
+  CheckCircle2,
   Columns,
   ClipboardList,
-  Code2,
   Database,
   HelpCircle,
   LayoutGrid,
   LogOut,
   Package,
   Radio,
+  Receipt,
+  RotateCcw,
   ScrollText,
   Shield,
-  Sparkles,
   UserCog,
   Users,
   Wifi,
+  Wrench,
 } from 'lucide-react';
 import { useIOMS } from '../context/IOMSContext';
 import { useAuth } from '../context/AuthContext';
 import { AppModule } from '../types';
-import { getNavigationSectionsForRole, getRoleWorkspace } from '../config/roleWorkspace';
-import { getRoutePathForModule, isImplementedAppModule, resolveModuleRouteTarget } from '../routing/moduleRoutes';
+import { getNavigationSections, getRoleWorkspace } from '../config/roleWorkspace';
+import { getRoutePathForModule } from '../routing/moduleRoutes';
 
 interface SidebarNavProps {
   onOpenTechSpecs: () => void;
@@ -30,6 +34,23 @@ interface SidebarNavProps {
 
 const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutGrid,
+  about: BadgeInfo,
+  pelanggan: Users,
+  penagihan: Activity,
+  request_pppoe_noc: Radio,
+  request_rembes: Receipt,
+  approval_rembes_finance: CheckCircle2,
+  laporan_keuangan: ScrollText,
+  retur_gudang_perangkat: RotateCcw,
+  panel_kepala_teknisi: Shield,
+  panel_teknisi_lapangan: ClipboardList,
+  pengerjaan_instalasi_lapangan: Wrench,
+  qc_instalasi_noc: CheckCircle2,
+  registrasi_pelanggan_baru: ClipboardList,
+  validasi_registrasi: Shield,
+  survey_instalasi: Radio,
+  request_gudang_instalasi: Package,
+  aktivasi_instalasi: LayoutGrid,
   service_registrations: ClipboardList,
   helpdesk: HelpCircle,
   noc: Radio,
@@ -63,30 +84,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const location = useLocation();
 
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const navigationSections = navigationConfig && navigationConfig.heads.length > 0
-    ? navigationConfig.heads
-        .sort((left, right) => left.order - right.order)
-        .map((head) => ({
-          id: head.key,
-          label: head.label,
-          searchLabel: head.label,
-          order: head.order,
-          modules: navigationConfig.modules
-            .filter((module) =>
-              module.navigationHeadKey === head.key &&
-              navigationConfig.allowedModuleKeys.includes(module.key) &&
-              isImplementedAppModule(module.key),
-            )
-            .sort((left, right) => left.order - right.order)
-            .map((module) => ({
-              id: module.key as AppModule,
-              label: module.label,
-              description: module.description,
-              routeTarget: resolveModuleRouteTarget(module.routeTarget, module.key),
-            })),
-        }))
-        .filter((head) => head.modules.length > 0)
-    : getNavigationSectionsForRole(activeRole);
+  const navigationSections = getNavigationSections(activeRole, navigationConfig);
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-200 bg-white text-slate-700 z-30 select-none">
@@ -145,9 +143,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                       }`}>
                         <Icon className="h-4 w-4" />
                       </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">{item.label}</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold leading-6 break-words">{item.label}</span>
                       </span>
                     </div>
                   </button>
@@ -156,28 +153,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </div>
           </div>
         ))}
-
-        <div className="space-y-1 border-t border-slate-200 pt-4">
-          <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-            System & Guides
-          </div>
-
-          <button
-            onClick={onOpenWorkflowGuide}
-            className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-3 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>{activeRole === 'superadmin' ? 'Admin Playbook' : 'Panduan 6 Alur Kerja'}</span>
-          </button>
-
-          <button
-            onClick={onOpenTechSpecs}
-            className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-3 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-          >
-            <Code2 className="w-4 h-4 text-emerald-400" />
-            <span>Backend Spec (Laravel)</span>
-          </button>
-        </div>
       </nav>
 
       <div className="mt-auto space-y-3 border-t border-slate-200 bg-slate-50 p-4">

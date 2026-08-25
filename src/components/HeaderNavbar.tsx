@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  BadgeInfo,
   Bell,
+  CheckCircle2,
   ClipboardList,
   ChevronDown,
   Columns,
@@ -13,22 +15,25 @@ import {
   Menu,
   Package,
   Radio,
+  Receipt,
+  RotateCcw,
   ScrollText,
   Search,
   Shield,
   UserCog,
   Users,
   Wifi,
+  Wrench,
   X,
 } from 'lucide-react';
 import { useIOMS } from '../context/IOMSContext';
 import { useAuth } from '../context/AuthContext';
 import { AppModule } from '../types';
 import {
-  getNavigationSectionsForRole,
+  getNavigationSections,
   getRoleWorkspace,
 } from '../config/roleWorkspace';
-import { getDefaultRouteForRole, getRoutePathForModule, isImplementedAppModule, resolveModuleRouteTarget } from '../routing/moduleRoutes';
+import { getDefaultRouteForRole, getRoutePathForModule } from '../routing/moduleRoutes';
 
 interface HeaderNavbarProps {
   onOpenArchSpecs: () => void;
@@ -38,6 +43,23 @@ interface HeaderNavbarProps {
 
 const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutGrid,
+  about: BadgeInfo,
+  pelanggan: Users,
+  penagihan: Activity,
+  request_pppoe_noc: Radio,
+  request_rembes: Receipt,
+  approval_rembes_finance: CheckCircle2,
+  laporan_keuangan: ScrollText,
+  retur_gudang_perangkat: RotateCcw,
+  panel_kepala_teknisi: Shield,
+  panel_teknisi_lapangan: ClipboardList,
+  pengerjaan_instalasi_lapangan: Wrench,
+  qc_instalasi_noc: CheckCircle2,
+  registrasi_pelanggan_baru: ClipboardList,
+  validasi_registrasi: Shield,
+  survey_instalasi: Radio,
+  request_gudang_instalasi: Package,
+  aktivasi_instalasi: Activity,
   service_registrations: ClipboardList,
   helpdesk: HelpCircle,
   noc: Radio,
@@ -79,31 +101,8 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   const location = useLocation();
 
   const roleWorkspace = getRoleWorkspace(activeRole);
-  const homeRoute = getDefaultRouteForRole(activeRole, navigationConfig);
-  const navigationSections = navigationConfig && navigationConfig.heads.length > 0
-    ? navigationConfig.heads
-        .sort((left, right) => left.order - right.order)
-        .map((head) => ({
-          id: head.key,
-          label: head.label,
-          searchLabel: head.label,
-          order: head.order,
-          modules: navigationConfig.modules
-            .filter((module) =>
-              module.navigationHeadKey === head.key &&
-              navigationConfig.allowedModuleKeys.includes(module.key) &&
-              isImplementedAppModule(module.key),
-            )
-            .sort((left, right) => left.order - right.order)
-            .map((module) => ({
-              id: module.key as AppModule,
-              label: module.label,
-              description: module.description,
-              routeTarget: resolveModuleRouteTarget(module.routeTarget, module.key),
-            })),
-        }))
-        .filter((head) => head.modules.length > 0)
-    : getNavigationSectionsForRole(activeRole);
+  const homeRoute = getDefaultRouteForRole(activeRole, currentUser.dashboardModuleKey, navigationConfig);
+  const navigationSections = getNavigationSections(activeRole, navigationConfig);
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [navigationQuery, setNavigationQuery] = useState('');
@@ -280,10 +279,9 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                                 }`}>
                                   <Icon className="h-4 w-4" />
                                 </span>
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-semibold">{moduleMeta.label}</span>
-                                  <span className="mt-1 block text-xs leading-5 text-slate-500">
-                                    {moduleMeta.description}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm font-semibold leading-6 break-words">
+                                    {moduleMeta.label}
                                   </span>
                                 </span>
                               </button>
@@ -318,22 +316,6 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={onOpenWorkflowGuide}
-            className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700 xl:inline-flex"
-          >
-            Panduan
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenArchSpecs}
-            className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700 xl:inline-flex"
-          >
-            Backend
-          </button>
-
           <button
             type="button"
             className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-amber-500 shadow-sm transition hover:border-amber-200 hover:bg-amber-50"

@@ -1,19 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   TrendingUp,
-  DollarSign,
-  Users,
-  ShieldCheck,
   CheckCircle2,
-  AlertTriangle,
   Receipt,
-  FileCheck,
-  Building,
-  Sparkles,
-  PieChart,
   ArrowUpRight
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
+import { ProcurementRequest } from '../../types';
+import { ConfirmActionModal } from '../modals/ConfirmActionModal';
+import { NotesActionModal } from '../modals/NotesActionModal';
+
+type ManagementDecisionState =
+  | {
+      type: 'approve';
+      request: ProcurementRequest;
+      notes: string;
+    }
+  | {
+      type: 'reject';
+      request: ProcurementRequest;
+      notes: string;
+    }
+  | null;
 
 export const ManagementDashboardView: React.FC = () => {
   const {
@@ -21,7 +29,10 @@ export const ManagementDashboardView: React.FC = () => {
     tickets,
     procurementRequests,
     approveProcurementByManagement,
+    rejectProcurementByManagement,
   } = useIOMS();
+  const [decisionState, setDecisionState] = useState<ManagementDecisionState>(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
 
   const totalRevenue = customers
     .filter((c) => c.billingStatus === 'paid')
@@ -34,6 +45,22 @@ export const ManagementDashboardView: React.FC = () => {
   const pendingManagementCapex = procurementRequests.filter(
     (p) => p.status === 'pending_management'
   );
+
+  const handleDecision = async () => {
+    if (!decisionState) return;
+
+    setDecisionLoading(true);
+    try {
+      if (decisionState.type === 'approve') {
+        await approveProcurementByManagement(decisionState.request.id, decisionState.notes);
+      } else {
+        await rejectProcurementByManagement(decisionState.request.id, decisionState.notes);
+      }
+      setDecisionState(null);
+    } finally {
+      setDecisionLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -153,22 +180,42 @@ export const ManagementDashboardView: React.FC = () => {
                     <span>{req.financeApproval?.notes}</span>
                   </div>
 
+                  {req.rejectionNotes ? (
+                    <div className="bg-rose-50 p-2.5 rounded-xl border border-rose-200 text-xs text-rose-800 max-w-xl">
+                      <span className="font-bold">Catatan revisi terakhir: </span>
+                      <span>{req.rejectionNotes}</span>
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-3 text-xs text-slate-500 pt-1">
                     <span>Jumlah: <strong>{req.quantity} {req.unit}</strong></span>
                     <span>Total Capex: <strong className="text-emerald-700 font-mono text-sm">Rp {req.totalAmount.toLocaleString('id-ID')}</strong></span>
                   </div>
                 </div>
 
-                <div className="shrink-0">
+                <div className="flex shrink-0 flex-col gap-2">
                   <button
-                    onClick={() => {
-                      const notes = prompt('Catatan persetujuan Direktur:', 'Capex disetujui untuk pengadaan stok Q3 2026.');
-                      if (notes !== null) approveProcurementByManagement(req.id, notes);
-                    }}
+                    type="button"
+                    onClick={() => setDecisionState({
+                      type: 'approve',
+                      request: req,
+                      notes: 'Capex disetujui untuk pengadaan stok operasional.',
+                    })}
                     className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center space-x-2"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>Setujui Pengeluaran Capex (ACC Direktur)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionState({
+                      type: 'reject',
+                      request: req,
+                      notes: 'Mohon revisi justifikasi pembelian, quantity, atau estimasi harga.',
+                    })}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-xs font-bold text-rose-700 transition-all hover:bg-rose-100"
+                  >
+                    Tolak & Kembalikan
                   </button>
                 </div>
               </div>
@@ -176,6 +223,44 @@ export const ManagementDashboardView: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ConfirmActionModal
+        open={decisionState?.type === 'approve'}
+        title="Konfirmasi Approval Capex"
+        message={
+          decisionState?.type === 'approve'
+            ? `Pengajuan ${decisionState.request.id} untuk ${decisionState.request.itemName} akan disetujui atasan dan dikembalikan ke warehouse sebagai approved.`
+            : ''
+        }
+        confirmLabel="Ya, Setujui"
+        cancelLabel="Batal"
+        tone="success"
+        loading={decisionLoading}
+        onCancel={() => setDecisionState(null)}
+        onConfirm={() => void handleDecision()}
+      />
+
+      <NotesActionModal
+        open={decisionState?.type === 'reject'}
+        title="Tolak Pengajuan Capex"
+        message="Request procurement ini akan dikembalikan ke warehouse dengan status revisi pada ID yang sama."
+        label="Catatan Revisi Atasan"
+        value={decisionState?.type === 'reject' ? decisionState.notes : ''}
+        onChange={(value) => {
+          setDecisionState((current) =>
+            current?.type === 'reject'
+              ? { ...current, notes: value }
+              : current,
+          );
+        }}
+        placeholder="Tulis alasan penolakan atau poin revisi yang harus dilengkapi warehouse."
+        confirmLabel="Tolak Pengajuan"
+        cancelLabel="Batal"
+        tone="danger"
+        loading={decisionLoading}
+        onCancel={() => setDecisionState(null)}
+        onConfirm={() => void handleDecision()}
+      />
     </div>
   );
 };

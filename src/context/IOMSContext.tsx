@@ -15,7 +15,10 @@ import {
   InterDivisionTask,
   NetworkODP,
   ActivityAuditLog,
-  CustomerStatus
+  CustomerStatus,
+  FinanceMutation,
+  FinancialLedgerEntry,
+  ReimbursementRequest,
 } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
 import { useAuth } from './AuthContext';
@@ -49,6 +52,9 @@ interface IOMSContextType {
   workOrders: WorkOrder[];
   inventory: InventoryItem[];
   procurementRequests: ProcurementRequest[];
+  reimbursementRequests: ReimbursementRequest[];
+  financeMutations: FinanceMutation[];
+  financialLedger: FinancialLedgerEntry[];
   tasks: InterDivisionTask[];
   networkOdps: NetworkODP[];
   auditLogs: ActivityAuditLog[];
@@ -61,12 +67,33 @@ interface IOMSContextType {
   nocRejectServiceRegistration: (registrationId: string, notes?: string) => void;
   createInstallationWorkOrderFromRegistration: (registrationId: string) => void;
   createCustomer: (customerData: Partial<Customer>, initialDepositPaid: boolean) => void;
-  updateCustomerStatus: (customerId: string, status: CustomerStatus, notes?: string) => void;
+  updateCustomerStatus: (customerId: string, status: CustomerStatus, notes?: string) => Promise<void>;
+  recordCustomerPayment: (customerId: string, notes?: string) => Promise<void>;
   createTroubleTicket: (ticketData: Partial<TroubleTicket>) => void;
   resolveTicketRemotely: (ticketId: string, notes: string) => void;
-  escalateTicketToLeadTech: (ticketId: string, nocNotes: string) => void;
+  escalateTicketToLeadTech: (
+    ticketId: string,
+    nocNotes: string,
+    options?: {
+      requiresReplacementRequest?: boolean;
+    }
+  ) => void;
+  helpdeskCloseTicket: (ticketId: string, notes: string, connectionNormal: boolean) => void;
   createWorkOrder: (woData: Partial<WorkOrder>) => void;
   assignWorkOrderToTech: (woId: string, techId: string) => void;
+  requestWorkOrderPppoe: (workOrderId: string, notes?: string) => Promise<void>;
+  approveWorkOrderPppoe: (
+    workOrderId: string,
+    payload: {
+      pppoeUsername: string;
+      pppoePassword: string;
+      vlan?: string | null;
+      notes?: string;
+    },
+  ) => Promise<void>;
+  rejectWorkOrderPppoe: (workOrderId: string, notes: string) => Promise<void>;
+  confirmInstallationCashPayment: (workOrderId: string, notes?: string) => Promise<void>;
+  confirmInstallationTransferPayment: (workOrderId: string, notes?: string) => Promise<void>;
   submitFieldTechReport: (
     woOrTicketId: string,
     isWorkOrder: boolean,
@@ -112,9 +139,25 @@ interface IOMSContextType {
     }
   ) => void;
   createProcurementRequest: (req: Partial<ProcurementRequest>) => void;
-  approveProcurementByFinance: (reqId: string, notes?: string) => void;
+  updateProcurementRequest: (reqId: string, req: Partial<ProcurementRequest>) => Promise<void>;
+  approveProcurementByFinance: (reqId: string, notes?: string) => Promise<void>;
+  rejectProcurementByFinance: (reqId: string, notes: string) => Promise<void>;
   approveProcurementByManagement: (reqId: string, notes?: string) => void;
+  rejectProcurementByManagement: (reqId: string, notes: string) => Promise<void>;
+  markProcurementAsOrdered: (reqId: string, notes?: string) => Promise<void>;
   receiveProcurementStock: (reqId: string) => void;
+  createReimbursementDraft: (payload: FormData) => Promise<ReimbursementRequest>;
+  updateReimbursementDraft: (requestId: string, payload: FormData) => Promise<ReimbursementRequest>;
+  submitReimbursementRequest: (requestId: string) => Promise<void>;
+  financeApproveReimbursement: (requestId: string, notes?: string) => Promise<void>;
+  financeRejectReimbursement: (requestId: string, notes: string) => Promise<void>;
+  forwardReimbursementToManagement: (requestId: string, notes: string) => Promise<void>;
+  managementApproveReimbursement: (requestId: string, notes?: string) => Promise<void>;
+  managementRejectReimbursement: (requestId: string, notes: string) => Promise<void>;
+  markReimbursementPaid: (requestId: string, notes?: string) => Promise<void>;
+  createFinanceMutation: (payload: Partial<FinanceMutation>) => Promise<void>;
+  updateFinanceMutation: (mutationId: string, payload: Partial<FinanceMutation>) => Promise<void>;
+  deleteFinanceMutation: (mutationId: string) => Promise<void>;
   createInterDivisionTask: (task: Partial<InterDivisionTask>) => void;
   createTask: (task: Partial<InterDivisionTask>) => void;
   updateTaskStatus: (taskId: string, newStatus: 'todo' | 'in_progress' | 'review' | 'done', resolutionNotes?: string) => void;
@@ -142,6 +185,14 @@ const unwrapCollection = <T,>(payload: unknown): T[] => {
   return [];
 };
 
+const unwrapResource = <T,>(payload: unknown): T => {
+  if (payload && typeof payload === 'object' && 'data' in (payload as Record<string, unknown>)) {
+    return (payload as { data: T }).data;
+  }
+
+  return payload as T;
+};
+
 export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, authFetch, logout } = useAuth();
   const location = useLocation();
@@ -161,6 +212,9 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [procurementRequests, setProcurementRequests] = useState<ProcurementRequest[]>([]);
+  const [reimbursementRequests, setReimbursementRequests] = useState<ReimbursementRequest[]>([]);
+  const [financeMutations, setFinanceMutations] = useState<FinanceMutation[]>([]);
+  const [financialLedger, setFinancialLedger] = useState<FinancialLedgerEntry[]>([]);
   const [tasks, setTasks] = useState<InterDivisionTask[]>([]);
   const [networkOdps, setNetworkOdps] = useState<NetworkODP[]>([]);
   const [auditLogs, setAuditLogs] = useState<ActivityAuditLog[]>([]);
@@ -172,9 +226,9 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return moduleFromRoute;
     }
 
-    const fallbackPath = getDefaultRouteForRole(activeRole, navigationConfig);
+    const fallbackPath = getDefaultRouteForRole(activeRole, currentUser.dashboardModuleKey, navigationConfig);
     return getModuleFromPathname(fallbackPath) ?? 'dashboard';
-  }, [activeRole, location.pathname, navigationConfig]);
+  }, [activeRole, currentUser.dashboardModuleKey, location.pathname, navigationConfig]);
 
   const setSelectedModule = (module: AppModule) => {
     const nextPath = getRoutePathForModule(module);
@@ -201,6 +255,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refreshAll = async () => {
+    const canViewFinanceLedger = ['superadmin', 'finance', 'management'].includes(activeRole);
     const [
       usersPayload,
       customersPayload,
@@ -209,6 +264,9 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       workOrdersPayload,
       inventoryPayload,
       procurementPayload,
+      reimbursementPayload,
+      financeMutationPayload,
+      financialLedgerPayload,
       tasksPayload,
       odpsPayload,
       auditPayload,
@@ -221,6 +279,9 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       apiRequest<unknown>('/work-orders'),
       apiRequest<unknown>('/inventory'),
       apiRequest<unknown>('/procurements'),
+      apiRequest<unknown>('/reimbursements'),
+      canViewFinanceLedger ? apiRequest<unknown>('/finance-mutations') : Promise.resolve({ data: [] }),
+      canViewFinanceLedger ? apiRequest<unknown>('/financial-ledger') : Promise.resolve({ data: [] }),
       apiRequest<unknown>('/tasks'),
       apiRequest<unknown>('/network-odps'),
       apiRequest<unknown>('/audit-logs'),
@@ -235,6 +296,9 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setWorkOrders(unwrapCollection<WorkOrder>(workOrdersPayload));
     setInventory(unwrapCollection<InventoryItem>(inventoryPayload));
     setProcurementRequests(unwrapCollection<ProcurementRequest>(procurementPayload));
+    setReimbursementRequests(unwrapCollection<ReimbursementRequest>(reimbursementPayload));
+    setFinanceMutations(unwrapCollection<FinanceMutation>(financeMutationPayload));
+    setFinancialLedger(unwrapCollection<FinancialLedgerEntry>(financialLedgerPayload));
     setTasks(unwrapCollection<InterDivisionTask>(tasksPayload));
     setNetworkOdps(unwrapCollection<NetworkODP>(odpsPayload));
     setAuditLogs(unwrapCollection<ActivityAuditLog>(auditPayload));
@@ -264,7 +328,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [activeRole, navigationConfig]);
 
   const runMutation = (work: () => Promise<void>) => {
-    void (async () => {
+    return (async () => {
       try {
         await work();
       } catch (error) {
@@ -274,6 +338,18 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       }
     })();
+  };
+
+  const runStrictMutation = async <T,>(work: () => Promise<T>): Promise<T> => {
+    try {
+      return await work();
+    } catch (error) {
+      console.error(error);
+      if (error instanceof Error && error.message.includes('Sesi Anda telah berakhir')) {
+        await logout();
+      }
+      throw error;
+    }
   };
 
   const createServiceRegistration = (payload: Partial<ServiceRegistration>) => runMutation(async () => {
@@ -380,6 +456,15 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await refreshAll();
   });
 
+  const recordCustomerPayment = (customerId: string, notes?: string) => runMutation(async () => {
+    await apiRequest(`/customers/${customerId}/record-payment`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+    triggerCelebration();
+  });
+
   const createTroubleTicket = (ticketData: Partial<TroubleTicket>) => runMutation(async () => {
     await apiRequest('/tickets', {
       method: 'POST',
@@ -403,12 +488,28 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     triggerCelebration();
   });
 
-  const escalateTicketToLeadTech = (ticketId: string, nocNotes: string) => runMutation(async () => {
+  const escalateTicketToLeadTech = (
+    ticketId: string,
+    nocNotes: string,
+    options?: { requiresReplacementRequest?: boolean },
+  ) => runMutation(async () => {
     await apiRequest(`/tickets/${ticketId}/escalate`, {
       method: 'POST',
-      body: JSON.stringify({ notes: nocNotes }),
+      body: JSON.stringify({
+        notes: nocNotes,
+        requires_replacement_request: options?.requiresReplacementRequest ?? false,
+      }),
     });
     await refreshAll();
+  });
+
+  const helpdeskCloseTicket = (ticketId: string, notes: string, connectionNormal: boolean) => runMutation(async () => {
+    await apiRequest(`/tickets/${ticketId}/helpdesk-close`, {
+      method: 'POST',
+      body: JSON.stringify({ notes, connection_normal: connectionNormal }),
+    });
+    await refreshAll();
+    triggerCelebration();
   });
 
   const createWorkOrder = (_woData: Partial<WorkOrder>) => {
@@ -421,6 +522,61 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       body: JSON.stringify({ tech_id: techId }),
     });
     await refreshAll();
+  });
+
+  const requestWorkOrderPppoe = (workOrderId: string, notes?: string) => runStrictMutation(async () => {
+    await apiRequest(`/work-orders/${workOrderId}/request-pppoe`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const approveWorkOrderPppoe = (
+    workOrderId: string,
+    payload: {
+      pppoeUsername: string;
+      pppoePassword: string;
+      vlan?: string | null;
+      notes?: string;
+    },
+  ) => runStrictMutation(async () => {
+    await apiRequest(`/work-orders/${workOrderId}/approve-pppoe`, {
+      method: 'POST',
+      body: JSON.stringify({
+        pppoe_username: payload.pppoeUsername,
+        pppoe_password: payload.pppoePassword,
+        vlan: payload.vlan,
+        notes: payload.notes,
+      }),
+    });
+    await refreshAll();
+  });
+
+  const rejectWorkOrderPppoe = (workOrderId: string, notes: string) => runStrictMutation(async () => {
+    await apiRequest(`/work-orders/${workOrderId}/reject-pppoe`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const confirmInstallationCashPayment = (workOrderId: string, notes?: string) => runStrictMutation(async () => {
+    await apiRequest(`/work-orders/${workOrderId}/confirm-installation-cash`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+    triggerCelebration();
+  });
+
+  const confirmInstallationTransferPayment = (workOrderId: string, notes?: string) => runStrictMutation(async () => {
+    await apiRequest(`/work-orders/${workOrderId}/confirm-installation-transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+    triggerCelebration();
   });
 
   const submitFieldTechReport = (woOrTicketId: string, isWorkOrder: boolean, report: {
@@ -524,8 +680,31 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await refreshAll();
   });
 
+  const updateProcurementRequest = (reqId: string, req: Partial<ProcurementRequest>) => runMutation(async () => {
+    await apiRequest(`/procurements/${reqId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        item_code: req.itemCode,
+        item_name: req.itemName,
+        quantity: req.quantity,
+        unit: req.unit,
+        unit_price: req.unitPrice,
+        reason: req.reason,
+      }),
+    });
+    await refreshAll();
+  });
+
   const approveProcurementByFinance = (reqId: string, notes?: string) => runMutation(async () => {
     await apiRequest(`/procurements/${reqId}/finance-approve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const rejectProcurementByFinance = (reqId: string, notes: string) => runMutation(async () => {
+    await apiRequest(`/procurements/${reqId}/finance-reject`, {
       method: 'POST',
       body: JSON.stringify({ notes }),
     });
@@ -540,10 +719,140 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await refreshAll();
   });
 
+  const rejectProcurementByManagement = (reqId: string, notes: string) => runMutation(async () => {
+    await apiRequest(`/procurements/${reqId}/management-reject`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const markProcurementAsOrdered = (reqId: string, notes?: string) => runMutation(async () => {
+    await apiRequest(`/procurements/${reqId}/mark-ordered`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
   const receiveProcurementStock = (reqId: string) => runMutation(async () => {
     await apiRequest(`/procurements/${reqId}/receive`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+    await refreshAll();
+  });
+
+  const createReimbursementDraft = (payload: FormData) => runStrictMutation(async () => {
+    const response = await apiRequest<unknown>('/reimbursements', {
+      method: 'POST',
+      body: payload,
+    });
+    await refreshAll();
+    return unwrapResource<ReimbursementRequest>(response);
+  });
+
+  const updateReimbursementDraft = (requestId: string, payload: FormData) => runStrictMutation(async () => {
+    const response = await apiRequest<unknown>(`/reimbursements/${requestId}`, {
+      method: 'POST',
+      body: payload,
+    });
+    await refreshAll();
+    return unwrapResource<ReimbursementRequest>(response);
+  });
+
+  const submitReimbursementRequest = (requestId: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await refreshAll();
+  });
+
+  const financeApproveReimbursement = (requestId: string, notes?: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/finance-approve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const financeRejectReimbursement = (requestId: string, notes: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/finance-reject`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const forwardReimbursementToManagement = (requestId: string, notes: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/forward-to-management`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const managementApproveReimbursement = (requestId: string, notes?: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/management-approve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const managementRejectReimbursement = (requestId: string, notes: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/management-reject`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+  });
+
+  const markReimbursementPaid = (requestId: string, notes?: string) => runStrictMutation(async () => {
+    await apiRequest(`/reimbursements/${requestId}/mark-paid`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    await refreshAll();
+    triggerCelebration();
+  });
+
+  const createFinanceMutation = (payload: Partial<FinanceMutation>) => runStrictMutation(async () => {
+    await apiRequest('/finance-mutations', {
+      method: 'POST',
+      body: JSON.stringify({
+        transaction_date: payload.transactionDate,
+        type: payload.type,
+        category: payload.category,
+        amount: payload.amount,
+        description: payload.description,
+        reference: payload.reference,
+        status: payload.status,
+      }),
+    });
+    await refreshAll();
+  });
+
+  const updateFinanceMutation = (mutationId: string, payload: Partial<FinanceMutation>) => runStrictMutation(async () => {
+    await apiRequest(`/finance-mutations/${mutationId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        transaction_date: payload.transactionDate,
+        type: payload.type,
+        category: payload.category,
+        amount: payload.amount,
+        description: payload.description,
+        reference: payload.reference,
+        status: payload.status,
+      }),
+    });
+    await refreshAll();
+  });
+
+  const deleteFinanceMutation = (mutationId: string) => runStrictMutation(async () => {
+    await apiRequest(`/finance-mutations/${mutationId}`, {
+      method: 'DELETE',
     });
     await refreshAll();
   });
@@ -613,6 +922,9 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         workOrders,
         inventory,
         procurementRequests,
+        reimbursementRequests,
+        financeMutations,
+        financialLedger,
         tasks,
         networkOdps,
         auditLogs,
@@ -626,19 +938,42 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createInstallationWorkOrderFromRegistration,
         createCustomer,
         updateCustomerStatus,
+        recordCustomerPayment,
         createTroubleTicket,
         resolveTicketRemotely,
         escalateTicketToLeadTech,
+        helpdeskCloseTicket,
         createWorkOrder,
         assignWorkOrderToTech,
+        requestWorkOrderPppoe,
+        approveWorkOrderPppoe,
+        rejectWorkOrderPppoe,
+        confirmInstallationCashPayment,
+        confirmInstallationTransferPayment,
         submitFieldTechReport,
         approveLeadTechSOP,
         verifyAndCloseNOC,
         nocFinalVerifyInstallation,
         createProcurementRequest,
+        updateProcurementRequest,
         approveProcurementByFinance,
+        rejectProcurementByFinance,
         approveProcurementByManagement,
+        rejectProcurementByManagement,
+        markProcurementAsOrdered,
         receiveProcurementStock,
+        createReimbursementDraft,
+        updateReimbursementDraft,
+        submitReimbursementRequest,
+        financeApproveReimbursement,
+        financeRejectReimbursement,
+        forwardReimbursementToManagement,
+        managementApproveReimbursement,
+        managementRejectReimbursement,
+        markReimbursementPaid,
+        createFinanceMutation,
+        updateFinanceMutation,
+        deleteFinanceMutation,
         createInterDivisionTask,
         createTask,
         updateTaskStatus,

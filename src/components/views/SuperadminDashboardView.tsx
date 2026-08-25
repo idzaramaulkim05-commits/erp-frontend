@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowRight,
-  ClipboardList,
   Database,
   KeyRound,
   Layers3,
@@ -12,11 +11,11 @@ import {
   Save,
   Server,
   ShieldCheck,
+  Trash2,
   Users,
   Wifi,
 } from 'lucide-react';
 import {
-  AdminAuditItem,
   AdminModule,
   AdminOverview,
   AdminUser,
@@ -25,10 +24,11 @@ import {
   NavigationHead,
   RoleMeta,
   RoleModuleMapping,
-  SystemSession,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useIOMS } from '../../context/IOMSContext';
+import { MODULE_META, ROLE_DASHBOARD_MODULE_OPTIONS } from '../../config/roleWorkspace';
+import { ConfirmActionModal } from '../modals/ConfirmActionModal';
 
 interface SuperadminDashboardViewProps {
   selectedModule: string;
@@ -52,6 +52,10 @@ type AdminMappingPayload = {
   roleDivisionMap: Array<Record<string, string | number | boolean | null>>;
 };
 
+type StatusConfirmationState =
+  | { type: 'user'; user: AdminUser }
+  | { type: 'role'; role: RoleMeta };
+
 const emptyOverview: AdminOverview = {
   totalUsers: 0,
   activeUsers: 0,
@@ -72,7 +76,7 @@ const moduleTitles: Record<string, { title: string; description: string }> = {
     description: 'Kontrol utama untuk akun login, master data, modul navigasi, mapping role, dan audit sistem web.',
   },
   admin_users: {
-    title: 'Manajemen Akun Login',
+    title: 'Master Akun Login',
     description: 'Kelola akun login, status aktif, reset password, dan metadata user aplikasi.',
   },
   admin_roles: {
@@ -115,6 +119,7 @@ const defaultRoleForm: RoleMeta = {
   role: '',
   roleTitle: '',
   division: '',
+  dashboardModuleKey: 'dashboard',
   description: '',
   isActive: true,
   sortOrder: 0,
@@ -149,6 +154,23 @@ const createBlankHead = (order: number): NavigationHead => ({
 });
 
 const HEAD_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
+const normalizeNavigationHeadKey = (value: string) => {
+  const ascii = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+
+  const normalized = ascii.replace(/^[^a-z]+/, '');
+
+  if (normalized === 'oprasional') {
+    return 'operasional';
+  }
+
+  return normalized;
+};
 
 export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = ({ selectedModule }) => {
   const { authFetch } = useAuth();
@@ -158,7 +180,6 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleMeta[]>([]);
   const [masterGroups, setMasterGroups] = useState<MasterDataGroup[]>([]);
-  const [sessions, setSessions] = useState<SystemSession[]>([]);
   const [mappingPayload, setMappingPayload] = useState<AdminMappingPayload | null>(null);
   const [navigationHeads, setNavigationHeads] = useState<NavigationHead[]>([]);
   const [adminModules, setAdminModules] = useState<AdminModule[]>([]);
@@ -174,6 +195,8 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const [headDrafts, setHeadDrafts] = useState<Record<string, NavigationHead>>({});
   const [selectedMappingRole, setSelectedMappingRole] = useState<RoleMeta['role']>('helpdesk');
   const [mappingDrafts, setMappingDrafts] = useState<Record<string, RoleModuleMapping[]>>({});
+  const [statusConfirmation, setStatusConfirmation] = useState<StatusConfirmationState | null>(null);
+  const [statusConfirmationLoading, setStatusConfirmationLoading] = useState(false);
 
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -202,7 +225,6 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         mappingsPayload,
         navigationConfigPayload,
         infraMappingsPayload,
-        sessionsPayload,
       ] = await Promise.all([
         authFetch<{ data: AdminOverview }>('/admin/overview'),
         authFetch<{ data: AdminUser[] }>('/admin/users'),
@@ -212,7 +234,6 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         authFetch<{ data: { roles: RoleMeta[]; heads: NavigationHead[]; modules: AdminModule[]; mappings: RoleModuleMapping[] } }>('/admin/module-role-mappings'),
         authFetch<{ data: { heads: NavigationHead[]; modules: AdminModule[]; roleMappings: RoleModuleMapping[] } }>('/admin/navigation-config'),
         authFetch<{ data: AdminMappingPayload }>('/admin/mappings'),
-        authFetch<{ data: SystemSession[] }>('/admin/sessions'),
       ]);
 
       setOverview(overviewPayload.data);
@@ -223,7 +244,6 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       setAdminModules(modulesPayload.data.modules);
       setRoleModuleMappings(mappingsPayload.data.mappings);
       setMappingPayload(infraMappingsPayload.data);
-      setSessions(sessionsPayload.data);
 
       setRoleDrafts(
         Object.fromEntries(rolesPayload.data.map((role) => [role.role, { ...role }]))
@@ -286,7 +306,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const currentHeadDrafts = Object.values(headDrafts) as NavigationHead[];
   const normalizedHeadDrafts = currentHeadDrafts
     .map((head) => ({
-      key: head.key.trim(),
+      key: normalizeNavigationHeadKey(head.key.trim()),
       label: head.label.trim(),
       order: Number.isFinite(head.order) ? head.order : 0,
       isActive: head.isActive,
@@ -305,10 +325,10 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     : activeRoles;
 
   const overviewCards = [
-    { label: 'Total User', value: overview.totalUsers, target: 'admin_users' as AppModule, icon: Users },
-    { label: 'Role System', value: roles.length, target: 'admin_roles' as AppModule, icon: ShieldCheck },
-    { label: 'Modul Navigasi', value: adminModules.length, target: 'admin_modules' as AppModule, icon: Database },
-    { label: 'Mapping Role', value: roleModuleMappings.length, target: 'admin_module_roles' as AppModule, icon: Layers3 },
+    { label: 'Master Akun', value: overview.totalUsers, target: 'admin_users' as AppModule, icon: Users },
+    { label: 'Master Role', value: roles.length, target: 'admin_roles' as AppModule, icon: ShieldCheck },
+    { label: 'Master Data Modul', value: adminModules.length, target: 'admin_modules' as AppModule, icon: Database },
+    { label: 'Modul To Role', value: roleModuleMappings.length, target: 'admin_module_roles' as AppModule, icon: Layers3 },
   ];
 
   const resetUserForm = () => {
@@ -377,6 +397,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   };
 
   const toggleUserStatus = async (user: AdminUser) => {
+    setStatusConfirmationLoading(true);
     try {
       await authFetch(`/admin/users/${user.id}/status`, {
         method: 'PATCH',
@@ -386,6 +407,8 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       await loadAdminData();
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Gagal memperbarui status akun.');
+    } finally {
+      setStatusConfirmationLoading(false);
     }
   };
 
@@ -412,6 +435,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     setEditingRole(null);
     setRoleForm({
       ...defaultRoleForm,
+      dashboardModuleKey: 'dashboard',
       sortOrder: roles.length + 1,
     });
     setIsRoleFormOpen(true);
@@ -423,6 +447,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       role: role.role,
       roleTitle: role.roleTitle,
       division: role.division,
+      dashboardModuleKey: role.dashboardModuleKey ?? 'dashboard',
       description: role.description ?? '',
       isActive: role.isActive,
       sortOrder: role.sortOrder ?? 0,
@@ -436,6 +461,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         role: roleForm.role,
         role_title: roleForm.roleTitle,
         division: roleForm.division,
+        dashboard_module_key: roleForm.dashboardModuleKey ?? 'dashboard',
         description: roleForm.description ?? '',
         sort_order: roleForm.sortOrder ?? 0,
         is_active: roleForm.isActive,
@@ -463,29 +489,8 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     }
   };
 
-  const saveRoleMeta = async (role: RoleMeta['role']) => {
-    const draft = roleDrafts[role];
-    if (!draft) return;
-
-    try {
-      await authFetch(`/admin/roles/${role}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          role_title: draft.roleTitle,
-          division: draft.division,
-          description: draft.description ?? '',
-          sort_order: draft.sortOrder ?? 0,
-          is_active: draft.isActive,
-        }),
-      });
-      setFeedback(`Metadata role ${role} berhasil diperbarui.`);
-      await loadAdminData();
-    } catch (roleError) {
-      setError(roleError instanceof Error ? roleError.message : 'Gagal memperbarui role.');
-    }
-  };
-
   const toggleRoleStatus = async (role: RoleMeta) => {
+    setStatusConfirmationLoading(true);
     try {
       await authFetch(`/admin/roles/${role.role}/status`, {
         method: 'PATCH',
@@ -495,6 +500,8 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       await loadAdminData();
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Gagal memperbarui status role.');
+    } finally {
+      setStatusConfirmationLoading(false);
     }
   };
 
@@ -595,6 +602,14 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       return 'Route target harus diawali /app/, misalnya /app/helpdesk.';
     }
 
+    if (message.includes('Modul sistem inti tidak boleh dihapus')) {
+      return 'Modul sistem inti tidak boleh dihapus dari master modul.';
+    }
+
+    if (message.includes('Modul tidak bisa dihapus karena masih dipakai relasi data lain')) {
+      return 'Modul tidak bisa dihapus karena masih dipakai relasi data lain. Lepaskan dependensinya terlebih dahulu.';
+    }
+
     return message;
   };
 
@@ -647,6 +662,35 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       await loadAdminData();
     } catch (moduleError) {
       setError(normalizeModuleErrorMessage(moduleError instanceof Error ? moduleError.message : 'Gagal menyimpan modul.'));
+    }
+  };
+
+  const deleteModule = async (module: AdminModule) => {
+    const confirmed = window.confirm(
+      `Hapus modul ${module.label} (${module.key})?\n\nJika modul ini masih dimapping ke role, mapping terkait akan ikut terhapus otomatis. Modul sistem inti tetap tidak bisa dihapus.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setFeedback(null);
+
+    try {
+      await authFetch(`/admin/modules/${module.key}`, {
+        method: 'DELETE',
+      });
+      setFeedback(`Modul ${module.label} berhasil dihapus.`);
+      if (editingModule?.key === module.key) {
+        setIsModuleFormOpen(false);
+        setEditingModule(null);
+        setModuleForm(defaultModuleForm);
+        setModuleFormErrors(defaultModuleFormErrors);
+      }
+      await loadAdminData();
+    } catch (moduleError) {
+      setError(normalizeModuleErrorMessage(moduleError instanceof Error ? moduleError.message : 'Gagal menghapus modul.'));
     }
   };
 
@@ -777,10 +821,11 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {[
+              { title: 'Master Akun', subtitle: 'Akun login dan status aktif', target: 'admin_users' as AppModule, count: users.length, icon: Users },
               { title: 'Master Data Role', subtitle: 'Role title dan division', target: 'admin_roles' as AppModule, count: roles.length, icon: ShieldCheck },
               { title: 'Master Data Modul', subtitle: 'Nama modul dan link akses', target: 'admin_modules' as AppModule, count: adminModules.length, icon: Database },
               { title: 'Modul To Role', subtitle: 'Visibilitas menu per role', target: 'admin_module_roles' as AppModule, count: roleModuleMappings.length, icon: Layers3 },
-              { title: 'Audit & Session', subtitle: 'Aktivitas admin dan user online', target: 'admin_audit' as AppModule, count: overview.auditCount, icon: ClipboardList },
+              { title: 'Mapping Infrastruktur', subtitle: 'Relasi data ODP dan entitas aplikasi', target: 'admin_mappings' as AppModule, count: mappingPayload?.odps.length ?? 0, icon: Network },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -799,15 +844,10 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
         </div>
 
         <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <h3 className="text-lg font-black text-slate-950">Audit trail terbaru</h3>
-          <div className="mt-5 space-y-3">
-            {overview.latestAuditLogs.map((item: AdminAuditItem) => (
-              <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold text-slate-900">{item.action}</p>
-                <p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.actorRole} · {item.timestamp}</p>
-                <p className="mt-2 text-xs text-slate-600">{item.details}</p>
-              </div>
-            ))}
+          <h3 className="text-lg font-black text-slate-950">Arah pengelolaan master</h3>
+          <div className="mt-5 space-y-4 text-sm text-slate-600">
+            <p>Gunakan <span className="font-semibold text-slate-900">Master Role</span> sebagai sumber role akun login, lalu pakai <span className="font-semibold text-slate-900">Master Data Modul</span> untuk mendaftarkan fitur dan link akses internal.</p>
+            <p>Setelah modul dibuat, tentukan role yang boleh mengaksesnya melalui <span className="font-semibold text-slate-900">Modul To Role</span>. Menu master admin tidak ditampilkan di navbar global.</p>
           </div>
         </div>
       </div>
@@ -860,7 +900,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
               <button onClick={() => setPasswordTarget(user)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
                 Reset Password
               </button>
-              <button onClick={() => void toggleUserStatus(user)} className={`rounded-xl px-3 py-2 text-xs font-semibold ${user.isActive ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+              <button onClick={() => setStatusConfirmation({ type: 'user', user })} className={`rounded-xl px-3 py-2 text-xs font-semibold ${user.isActive ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                 {user.isActive ? 'Nonaktifkan' : 'Aktifkan'}
               </button>
             </div>
@@ -887,42 +927,37 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
       <div className="space-y-3">
         {roles.map((role) => {
-          const draft = roleDrafts[role.role] ?? role;
           return (
             <div key={role.role} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-              <div className="grid gap-4 xl:grid-cols-[0.8fr_1fr_1fr_1.1fr_auto] xl:items-end">
+              <div className="grid gap-4 xl:grid-cols-[0.8fr_1fr_1fr_1fr_1.1fr_auto] xl:items-end">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{role.role}</p>
                   <p className="mt-2 text-sm text-slate-500">{role.isActive ? 'Role aktif' : 'Role nonaktif'}</p>
                 </div>
-                <input
-                  value={draft.roleTitle}
-                  onChange={(event) => setRoleDrafts((state) => ({ ...state, [role.role]: { ...draft, roleTitle: event.target.value } }))}
-                  placeholder="Role title"
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
-                />
-                <input
-                  value={draft.division}
-                  onChange={(event) => setRoleDrafts((state) => ({ ...state, [role.role]: { ...draft, division: event.target.value } }))}
-                  placeholder="Division"
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
-                />
-                <input
-                  value={draft.description ?? ''}
-                  onChange={(event) => setRoleDrafts((state) => ({ ...state, [role.role]: { ...draft, description: event.target.value } }))}
-                  placeholder="Deskripsi role"
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
-                />
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Role Title</p>
+                  <p className="mt-1 font-semibold text-slate-900">{role.roleTitle}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Division</p>
+                  <p className="mt-1 font-semibold text-slate-900">{role.division}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Halaman Dashboard</p>
+                  <p className="mt-1 font-semibold text-slate-900">
+                    {MODULE_META[role.dashboardModuleKey ?? 'dashboard']?.label ?? (role.dashboardModuleKey ?? 'dashboard')}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Deskripsi</p>
+                  <p className="mt-1 text-slate-700">{role.description || '-'}</p>
+                </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <button onClick={() => openEditRole(role)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
-                    Detail
+                    Edit
                   </button>
-                  <button onClick={() => void toggleRoleStatus(role)} className={`rounded-xl px-3 py-2 text-xs font-semibold ${role.isActive ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                  <button onClick={() => setStatusConfirmation({ type: 'role', role })} className={`rounded-xl px-3 py-2 text-xs font-semibold ${role.isActive ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                     {role.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                  </button>
-                  <button onClick={() => void saveRoleMeta(role.role)} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-                    <Save className="h-4 w-4" />
-                    Simpan
                   </button>
                 </div>
               </div>
@@ -1035,7 +1070,11 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
                   value={draft.key}
                   onChange={(event) => {
                     if (!isNewHeadDraft) return;
-                    setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, key: event.target.value } }));
+                    setHeadDrafts((state) => ({
+                      ...state,
+                      [draftKey]: { ...draft, key: normalizeNavigationHeadKey(event.target.value) },
+                    }));
+                    setError(null);
                   }}
                   placeholder="Key head, contoh: operasional"
                   readOnly={!isNewHeadDraft}
@@ -1111,9 +1150,16 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Order</p>
                 <p className="mt-1 text-sm font-semibold text-slate-800">{module.order}</p>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
                 <button onClick={() => openEditModule(module)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
                   Edit Modul
+                </button>
+                <button
+                  onClick={() => void deleteModule(module)}
+                  className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Hapus
                 </button>
               </div>
             </div>
@@ -1271,45 +1317,10 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   const renderAudit = () => (
     <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <h3 className="text-lg font-black text-slate-950">Audit trail terbaru</h3>
-          <div className="mt-5 space-y-3">
-            {overview.latestAuditLogs.map((item: AdminAuditItem) => (
-              <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{item.action}</p>
-                    <p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.actorRole} · {item.timestamp}</p>
-                    <p className="mt-2 text-xs text-slate-600">{item.details}</p>
-                  </div>
-                  <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">{item.target}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <h3 className="text-lg font-black text-slate-950">Session user</h3>
-          <div className="mt-5 space-y-3 max-h-[560px] overflow-y-auto">
-            {sessions.map((session) => (
-              <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{session.name}</p>
-                    <p className="text-xs text-slate-500">{session.email}</p>
-                    <p className="mt-1 text-xs text-slate-500">{session.division}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${session.isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
-                      {session.isOnline ? 'Online' : 'Offline'}
-                    </span>
-                    <p className="mt-2 text-[11px] text-slate-500">{session.lastLoginAt ?? 'Belum login'}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+        <h3 className="text-lg font-black text-slate-950">Menu audit tidak ditampilkan</h3>
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+          Halaman audit tidak lagi diekspos dari dashboard utama maupun navbar global. Jika modul ini masih dipertahankan secara internal, aksesnya dilakukan secara langsung melalui route admin yang sesuai.
         </div>
       </div>
     </div>
@@ -1438,6 +1449,17 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
                 placeholder="Division"
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
               />
+              <select
+                value={roleForm.dashboardModuleKey ?? 'dashboard'}
+                onChange={(event) => setRoleForm((state) => ({ ...state, dashboardModuleKey: event.target.value as RoleMeta['dashboardModuleKey'] }))}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              >
+                {ROLE_DASHBOARD_MODULE_OPTIONS.map((moduleKey) => (
+                  <option key={moduleKey} value={moduleKey}>
+                    {MODULE_META[moduleKey].label}
+                  </option>
+                ))}
+              </select>
               <input
                 type="number"
                 value={roleForm.sortOrder ?? 0}
@@ -1567,6 +1589,52 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           </div>
         </div>
       )}
+
+      <ConfirmActionModal
+        open={statusConfirmation !== null}
+        title={
+          statusConfirmation?.type === 'user'
+            ? statusConfirmation.user.isActive ? 'Konfirmasi Nonaktifkan Akun' : 'Konfirmasi Aktifkan Akun'
+            : statusConfirmation?.role.isActive
+            ? 'Konfirmasi Nonaktifkan Role'
+            : 'Konfirmasi Aktifkan Role'
+        }
+        message={
+          statusConfirmation?.type === 'user'
+            ? statusConfirmation.user.isActive
+              ? `Akun ${statusConfirmation.user.name} (${statusConfirmation.user.email}) akan dinonaktifkan. User tidak akan bisa memakai aplikasi sampai statusnya diaktifkan kembali.`
+              : `Akun ${statusConfirmation.user.name} (${statusConfirmation.user.email}) akan diaktifkan kembali agar bisa login dan memakai aplikasi.`
+            : statusConfirmation?.role
+            ? statusConfirmation.role.isActive
+              ? `Role ${statusConfirmation.role.role} akan dinonaktifkan. Role ini tidak lagi tersedia sebagai role aktif aplikasi.`
+              : `Role ${statusConfirmation.role.role} akan diaktifkan kembali dan bisa dipakai sebagai role aktif aplikasi.`
+            : ''
+        }
+        confirmLabel={
+          statusConfirmation?.type === 'user'
+            ? statusConfirmation.user.isActive ? 'Ya, Nonaktifkan Akun' : 'Ya, Aktifkan Akun'
+            : statusConfirmation?.role?.isActive
+            ? 'Ya, Nonaktifkan Role'
+            : 'Ya, Aktifkan Role'
+        }
+        tone={
+          statusConfirmation?.type === 'user'
+            ? statusConfirmation.user.isActive ? 'danger' : 'success'
+            : statusConfirmation?.role?.isActive
+            ? 'danger'
+            : 'success'
+        }
+        loading={statusConfirmationLoading}
+        onCancel={() => setStatusConfirmation(null)}
+        onConfirm={() => {
+          if (!statusConfirmation) return;
+          if (statusConfirmation.type === 'user') {
+            void toggleUserStatus(statusConfirmation.user).finally(() => setStatusConfirmation(null));
+            return;
+          }
+          void toggleRoleStatus(statusConfirmation.role).finally(() => setStatusConfirmation(null));
+        }}
+      />
     </div>
   );
 };

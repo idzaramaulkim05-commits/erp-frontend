@@ -11,9 +11,9 @@ interface NewTicketModalProps {
 export const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose }) => {
   const { customers, createTroubleTicket } = useIOMS();
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || 'CUST-1042');
-  const [title, setTitle] = useState<string>('Lampu Indikator LOS Merah Berkedip');
-  const [description, setDescription] = useState<string>('Pelanggan komplain internet mati total sejak tadi sore. Lampu LOS di modem ZTE berkedip merah.');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || '');
+  const [title, setTitle] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
   const [category, setCategory] = useState<'los_red_light' | 'slow_connection' | 'wifi_issue' | 'other'>('los_red_light');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('high');
 
@@ -23,6 +23,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedCust) {
+      return;
+    }
+
     createTroubleTicket({
       customerId: selectedCust.id,
       customerName: selectedCust.name,
@@ -109,7 +113,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose 
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Contoh: Lampu LOS Merah Berkedip"
+              placeholder="Contoh: Internet putus total sejak siang"
               required
               className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden"
             />
@@ -128,7 +132,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose 
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900">
-            <strong>Alur Otomatisasi:</strong> Tiket baru akan masuk ke stasiun <strong>NOC Review</strong> terlebih dahulu untuk didiagnosis apakah bisa diperbaiki secara remote (mikrotik/OLT) atau memerlukan pengiriman Work Order fisik ke Kepala Teknisi.
+            <strong>Alur Otomatisasi:</strong> Tiket baru akan masuk ke stasiun <strong>NOC Review</strong> terlebih dahulu untuk didiagnosis apakah bisa diperbaiki secara remote atau memerlukan pengiriman Work Order fisik ke Kepala Teknisi.
           </div>
 
           <div className="pt-2 flex items-center justify-end space-x-2">

@@ -5,26 +5,28 @@ import { PipelineActionState, PipelineRoleDashboardSection, PipelineStageItem, S
 export const WorkspaceSummaryCard: React.FC<{
   label: string;
   value: string | number;
-  description: string;
+  description?: string;
   icon: LucideIcon;
   accentClass: string;
-}> = ({ label, value, description, icon: Icon, accentClass }) => (
-  <div className="rounded-3xl border border-white/10 bg-white/6 p-4 backdrop-blur-xs">
+  compact?: boolean;
+}> = ({ label, value, description, icon: Icon, accentClass, compact = false }) => (
+  <div className={`rounded-3xl border border-white/10 bg-white/6 backdrop-blur-xs ${compact ? 'p-3.5' : 'p-4'}`}>
     <div className={`inline-flex rounded-2xl p-2.5 ${accentClass}`}>
       <Icon className="h-4 w-4" />
     </div>
-    <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-    <p className="mt-1 text-3xl font-black text-white">{value}</p>
-    <p className="mt-1 text-xs text-slate-300">{description}</p>
+    <p className={`font-bold uppercase tracking-[0.18em] text-slate-400 ${compact ? 'mt-3 text-[10px]' : 'mt-4 text-[11px]'}`}>{label}</p>
+    <p className={`font-black text-white ${compact ? 'mt-1 text-2xl' : 'mt-1 text-3xl'}`}>{value}</p>
+    {description ? <p className="mt-1 text-xs text-slate-300">{description}</p> : null}
   </div>
 );
 
 export const WorkspaceOpsHero: React.FC<{
   eyebrow: string;
   title: string;
-  subtitle: string;
-  stats: Array<{ label: string; value: string | number; description: string; icon: LucideIcon; accentClass: string }>;
-}> = ({ eyebrow, title, subtitle, stats }) => (
+  subtitle?: string;
+  stats: Array<{ label: string; value: string | number; description?: string; icon: LucideIcon; accentClass: string }>;
+  compactStats?: boolean;
+}> = ({ eyebrow, title, subtitle, stats, compactStats = false }) => (
   <section className="rounded-[32px] border border-slate-200 bg-linear-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 text-white shadow-[0_20px_55px_rgba(15,23,42,0.18)]">
     <div className="grid gap-6 xl:grid-cols-[1.15fr,0.95fr] xl:items-end">
       <div className="space-y-4">
@@ -34,13 +36,13 @@ export const WorkspaceOpsHero: React.FC<{
         </span>
         <div className="space-y-2">
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{title}</h1>
-          <p className="max-w-2xl text-sm text-slate-300">{subtitle}</p>
+          {subtitle ? <p className="max-w-2xl text-sm text-slate-300">{subtitle}</p> : null}
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
         {stats.map((stat) => (
-          <WorkspaceSummaryCard key={stat.label} {...stat} />
+          <WorkspaceSummaryCard key={stat.label} {...stat} compact={compactStats} />
         ))}
       </div>
     </div>
@@ -50,7 +52,7 @@ export const WorkspaceOpsHero: React.FC<{
 export const WorkspaceSectionShell: React.FC<{
   eyebrow: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   badge?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
@@ -61,7 +63,7 @@ export const WorkspaceSectionShell: React.FC<{
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">{eyebrow}</p>
           <h3 className="mt-1 text-lg font-black text-slate-950">{title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {badge && (

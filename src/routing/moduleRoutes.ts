@@ -1,8 +1,25 @@
 import { AppModule, ImplementedAppModule, NavigationConfig, UserRole } from '../types';
-import { getDefaultModuleForRole, getResolvedAllowedModules } from '../config/roleWorkspace';
+import { getDashboardModuleForRole } from '../config/roleWorkspace';
 
 export const MODULE_ROUTE_MAP: Record<AppModule, string> = {
   dashboard: '/app/dashboard',
+  about: '/app/about',
+  pelanggan: '/app/pelanggan',
+  penagihan: '/app/penagihan',
+  request_pppoe_noc: '/app/request-pppoe-noc',
+  request_rembes: '/app/request-rembes',
+  approval_rembes_finance: '/app/approval-rembes-finance',
+  laporan_keuangan: '/app/laporan-keuangan',
+  retur_gudang_perangkat: '/app/retur-gudang-perangkat',
+  panel_kepala_teknisi: '/app/panel-kepala-teknisi',
+  panel_teknisi_lapangan: '/app/panel-teknisi-lapangan',
+  pengerjaan_instalasi_lapangan: '/app/pengerjaan-instalasi-lapangan',
+  qc_instalasi_noc: '/app/qc-instalasi-noc',
+  registrasi_pelanggan_baru: '/app/registrasi-pelanggan-baru',
+  validasi_registrasi: '/app/validasi-registrasi',
+  survey_instalasi: '/app/survey-instalasi',
+  request_gudang_instalasi: '/app/request-gudang-instalasi',
+  aktivasi_instalasi: '/app/aktivasi-instalasi',
   service_registrations: '/app/service-registrations',
   helpdesk: '/app/helpdesk',
   noc: '/app/noc',
@@ -58,12 +75,11 @@ export const resolveModuleRouteTarget = (routeTarget: string | null | undefined,
   return MODULE_ROUTE_MAP.dashboard;
 };
 
-export const getDefaultRouteForRole = (role: UserRole, navigationConfig?: NavigationConfig | null): string => {
-  const fallbackModule = getDefaultModuleForRole(role);
-  const allowedModules = getResolvedAllowedModules(role, navigationConfig);
-  const preferredModule = allowedModules.includes(fallbackModule)
-    ? fallbackModule
-    : allowedModules[0] ?? fallbackModule;
-
-  return getRoutePathForModule(preferredModule);
+export const getDefaultRouteForRole = (
+  role: UserRole,
+  preferredDashboardModule?: string | null,
+  navigationConfig?: NavigationConfig | null,
+): string => {
+  void navigationConfig;
+  return getRoutePathForModule(getDashboardModuleForRole(role, preferredDashboardModule));
 };

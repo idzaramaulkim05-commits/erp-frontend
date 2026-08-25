@@ -2,7 +2,7 @@ import { AppModule, KnownUserRole, NavigationConfig, UserRole } from '../types';
 
 export type RoleShellMode = 'admin' | 'analytics' | 'compact' | 'standalone';
 export type QuickActionType = 'new_ticket' | 'new_customer' | 'new_task' | 'new_procurement' | null;
-export type NavigationCategoryId = 'dashboards' | 'operasional' | 'koordinasi' | 'infrastruktur' | 'administrasi';
+export type NavigationCategoryId = 'dashboards' | 'operasional' | 'koordinasi' | 'infrastruktur' | 'administrasi' | 'keuangan';
 
 export interface NavigationCategoryMeta {
   id: NavigationCategoryId;
@@ -36,6 +36,21 @@ export interface RoleWorkspaceConfig {
   showSidebarNavigation: boolean;
 }
 
+export interface NavigationSectionModule {
+  id: AppModule;
+  label: string;
+  description: string;
+  routeTarget?: string;
+}
+
+export interface NavigationSection {
+  id: string;
+  label: string;
+  searchLabel: string;
+  order: number;
+  modules: NavigationSectionModule[];
+}
+
 export const SUPERADMIN_DASHBOARD_MODULES: AppModule[] = [
   'admin_users',
   'admin_roles',
@@ -45,6 +60,95 @@ export const SUPERADMIN_DASHBOARD_MODULES: AppModule[] = [
   'admin_mappings',
   'admin_audit',
 ];
+
+export const ROLE_DASHBOARD_MODULE_OPTIONS: AppModule[] = [
+  'dashboard',
+  'about',
+  'pelanggan',
+  'penagihan',
+  'request_pppoe_noc',
+  'request_rembes',
+  'approval_rembes_finance',
+  'laporan_keuangan',
+  'retur_gudang_perangkat',
+  'panel_kepala_teknisi',
+  'panel_teknisi_lapangan',
+  'pengerjaan_instalasi_lapangan',
+  'qc_instalasi_noc',
+  'registrasi_pelanggan_baru',
+  'validasi_registrasi',
+  'survey_instalasi',
+  'request_gudang_instalasi',
+  'aktivasi_instalasi',
+  'service_registrations',
+  'helpdesk',
+  'noc',
+  'lead_tech',
+  'field_tech',
+  'finance',
+  'inventory',
+  'kanban',
+  'network_map',
+];
+
+const MODULE_ROUTE_FALLBACK_MAP: Record<AppModule, string> = {
+  dashboard: '/app/dashboard',
+  about: '/app/about',
+  pelanggan: '/app/pelanggan',
+  penagihan: '/app/penagihan',
+  request_pppoe_noc: '/app/request-pppoe-noc',
+  request_rembes: '/app/request-rembes',
+  approval_rembes_finance: '/app/approval-rembes-finance',
+  laporan_keuangan: '/app/laporan-keuangan',
+  retur_gudang_perangkat: '/app/retur-gudang-perangkat',
+  panel_kepala_teknisi: '/app/panel-kepala-teknisi',
+  panel_teknisi_lapangan: '/app/panel-teknisi-lapangan',
+  pengerjaan_instalasi_lapangan: '/app/pengerjaan-instalasi-lapangan',
+  qc_instalasi_noc: '/app/qc-instalasi-noc',
+  registrasi_pelanggan_baru: '/app/registrasi-pelanggan-baru',
+  validasi_registrasi: '/app/validasi-registrasi',
+  survey_instalasi: '/app/survey-instalasi',
+  request_gudang_instalasi: '/app/request-gudang-instalasi',
+  aktivasi_instalasi: '/app/aktivasi-instalasi',
+  service_registrations: '/app/service-registrations',
+  helpdesk: '/app/helpdesk',
+  noc: '/app/noc',
+  lead_tech: '/app/lead-tech',
+  field_tech: '/app/field-tech',
+  finance: '/app/finance',
+  inventory: '/app/inventory',
+  kanban: '/app/kanban',
+  network_map: '/app/network-map',
+  admin_users: '/app/admin/users',
+  admin_roles: '/app/admin/roles',
+  admin_master: '/app/admin/master',
+  admin_modules: '/app/admin/modules',
+  admin_module_roles: '/app/admin/module-roles',
+  admin_mappings: '/app/admin/mappings',
+  admin_audit: '/app/admin/audit',
+};
+
+const isFallbackImplementedAppModule = (moduleKey: string): moduleKey is AppModule => (
+  Object.prototype.hasOwnProperty.call(MODULE_ROUTE_FALLBACK_MAP, moduleKey)
+);
+
+const getFallbackRoutePathForModule = (module: AppModule): string => MODULE_ROUTE_FALLBACK_MAP[module];
+
+const resolveFallbackRouteTarget = (routeTarget: string | null | undefined, moduleKey?: string): string => {
+  if (routeTarget?.startsWith('/app/')) {
+    return routeTarget;
+  }
+
+  if (routeTarget && isFallbackImplementedAppModule(routeTarget)) {
+    return getFallbackRoutePathForModule(routeTarget);
+  }
+
+  if (moduleKey && isFallbackImplementedAppModule(moduleKey)) {
+    return getFallbackRoutePathForModule(moduleKey);
+  }
+
+  return MODULE_ROUTE_FALLBACK_MAP.dashboard;
+};
 
 export const NAVIGATION_CATEGORIES: Record<NavigationCategoryId, NavigationCategoryMeta> = {
   dashboards: {
@@ -77,6 +181,12 @@ export const NAVIGATION_CATEGORIES: Record<NavigationCategoryId, NavigationCateg
     searchLabel: 'Cari modul administrasi...',
     order: 5,
   },
+  keuangan: {
+    id: 'keuangan',
+    label: 'Keuangan',
+    searchLabel: 'Cari modul keuangan...',
+    order: 6,
+  },
 };
 
 export const MODULE_META: Record<AppModule, ModuleMeta> = {
@@ -89,12 +199,180 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     quickAction: null,
     viewFormats: ['grid', 'table'],
   },
+  about: {
+    id: 'about',
+    label: 'About',
+    description: 'Halaman uji mapping role, route aktif, dan status akses modul.',
+    navigationCategory: 'dashboards',
+    navigationOrder: 2,
+    quickAction: null,
+    viewFormats: ['grid', 'table'],
+  },
+  pelanggan: {
+    id: 'pelanggan',
+    label: 'Pelanggan',
+    description: 'Daftar seluruh pelanggan aktif hasil registrasi dan aktivasi layanan.',
+    navigationCategory: 'operasional',
+    navigationOrder: 1,
+    searchPlaceholder: 'Cari ID pelanggan, nama, nomor HP, wilayah, atau paket...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  penagihan: {
+    id: 'penagihan',
+    label: 'Penagihan',
+    description: 'Monitoring masa aktif 30 hari, status tagihan, dan aksi perpanjang paket.',
+    navigationCategory: 'operasional',
+    navigationOrder: 2,
+    searchPlaceholder: 'Cari pelanggan, masa aktif, status tagihan, atau pembayaran terakhir...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  request_pppoe_noc: {
+    id: 'request_pppoe_noc',
+    label: 'Request PPPoE NOC',
+    description: 'Antrean request PPPoE dari teknisi lapangan.',
+    navigationCategory: 'operasional',
+    navigationOrder: 3,
+    searchPlaceholder: 'Cari WO pasang baru, pelanggan, wilayah, atau status request PPPoE...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  request_rembes: {
+    id: 'request_rembes',
+    label: 'Request Rembes',
+    description: 'Pengajuan rembes pegawai.',
+    navigationCategory: 'keuangan',
+    navigationOrder: 1,
+    searchPlaceholder: 'Cari rembes, pemohon, divisi, atau status...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  approval_rembes_finance: {
+    id: 'approval_rembes_finance',
+    label: 'Approval Rembes Finance',
+    description: 'Review, approval, dan pencairan rembes.',
+    navigationCategory: 'keuangan',
+    navigationOrder: 2,
+    searchPlaceholder: 'Cari request rembes, pemohon, atau status approval...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  laporan_keuangan: {
+    id: 'laporan_keuangan',
+    label: 'Laporan Keuangan',
+    description: 'Ledger billing, rembes, dan mutasi.',
+    navigationCategory: 'keuangan',
+    navigationOrder: 4,
+    searchPlaceholder: 'Cari mutasi, billing, rembes, atau referensi transaksi...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  retur_gudang_perangkat: {
+    id: 'retur_gudang_perangkat',
+    label: 'Retur Gudang Perangkat',
+    description: 'QC retur perangkat lama/error dan alat pengganti yang tidak terpakai dari pekerjaan maintenance.',
+    navigationCategory: 'operasional',
+    navigationOrder: 3,
+    searchPlaceholder: 'Cari retur perangkat, WO maintenance, pelanggan, atau status QC gudang...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  panel_kepala_teknisi: {
+    id: 'panel_kepala_teknisi',
+    label: 'Panel Kepala Teknisi',
+    description: 'Antrean pemasangan siap jalan, distribusi WO, dan kontrol assignment teknisi.',
+    navigationCategory: 'operasional',
+    navigationOrder: 5,
+    searchPlaceholder: 'Cari WO siap assign, pelanggan, wilayah, atau teknisi tujuan...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  panel_teknisi_lapangan: {
+    id: 'panel_teknisi_lapangan',
+    label: 'Panel Teknisi Lapangan',
+    description: 'Dashboard ringkas teknisi lapangan berisi summary tugas dan daftar pekerjaan aktif.',
+    navigationCategory: 'dashboards',
+    navigationOrder: 3,
+    quickAction: null,
+    viewFormats: ['grid', 'table'],
+  },
+  pengerjaan_instalasi_lapangan: {
+    id: 'pengerjaan_instalasi_lapangan',
+    label: 'Pengerjaan Instalasi Lapangan',
+    description: 'Halaman kerja teknisi lapangan untuk memulai instalasi, melengkapi bukti, dan submit hasil pekerjaan.',
+    navigationCategory: 'operasional',
+    navigationOrder: 6,
+    searchPlaceholder: 'Cari WO saya, pelanggan, wilayah, atau status pemasangan...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  qc_instalasi_noc: {
+    id: 'qc_instalasi_noc',
+    label: 'QC Instalasi NOC',
+    description: 'Antrean QC dan approval instalasi untuk review hasil pekerjaan teknisi lapangan.',
+    navigationCategory: 'operasional',
+    navigationOrder: 7,
+    searchPlaceholder: 'Cari WO QC, pelanggan, teknisi, atau status review...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  registrasi_pelanggan_baru: {
+    id: 'registrasi_pelanggan_baru',
+    label: 'Registrasi Pelanggan Baru',
+    description: 'Intake internal pelanggan baru, paket, lokasi, dan data awal instalasi.',
+    navigationCategory: 'operasional',
+    navigationOrder: 4,
+    searchPlaceholder: 'Cari nama pelanggan, nomor HP, paket, atau wilayah...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  validasi_registrasi: {
+    id: 'validasi_registrasi',
+    label: 'Validasi Registrasi',
+    description: 'Antrean verifikasi kelengkapan data registrasi sebelum survey.',
+    navigationCategory: 'operasional',
+    navigationOrder: 5,
+    searchPlaceholder: 'Cari registrasi yang menunggu validasi atau revisi data...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  survey_instalasi: {
+    id: 'survey_instalasi',
+    label: 'Survey Instalasi',
+    description: 'Kelayakan instalasi, ODP, jalur, dan kebutuhan teknis survey.',
+    navigationCategory: 'operasional',
+    navigationOrder: 6,
+    searchPlaceholder: 'Cari pelanggan survey, jalur, ODP, atau status layak...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  request_gudang_instalasi: {
+    id: 'request_gudang_instalasi',
+    label: 'Request Gudang Instalasi',
+    description: 'Permintaan material instalasi dan status penyerahan perangkat.',
+    navigationCategory: 'operasional',
+    navigationOrder: 8,
+    searchPlaceholder: 'Cari request gudang, WO, pelanggan, atau status material...',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
+  aktivasi_instalasi: {
+    id: 'aktivasi_instalasi',
+    label: 'Aktivasi Instalasi',
+    description: 'Alias kompatibilitas untuk mengarahkan role ke modul kerja lapangan atau QC NOC yang baru.',
+    navigationCategory: 'operasional',
+    navigationOrder: 9,
+    searchPlaceholder: 'Alias kompatibilitas aktivasi instalasi.',
+    quickAction: null,
+    viewFormats: ['table', 'grid'],
+  },
   service_registrations: {
     id: 'service_registrations',
     label: 'Registrasi Pasang Baru',
     description: 'Pipeline sales, finance, NOC, dan dispatch untuk pelanggan baru.',
     navigationCategory: 'operasional',
-    navigationOrder: 1,
+    navigationOrder: 10,
     searchPlaceholder: 'Cari registrasi, nama pelanggan, ODP, atau status approval...',
     quickAction: 'new_customer',
     viewFormats: ['table', 'grid'],
@@ -104,7 +382,7 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'Helpdesk & Ticketing',
     description: 'Aduan pelanggan, intake tiket, dan alur helpdesk.',
     navigationCategory: 'operasional',
-    navigationOrder: 2,
+    navigationOrder: 8,
     searchPlaceholder: 'Cari pelanggan, nomor tiket, atau nomor aduan...',
     quickAction: 'new_ticket',
     viewFormats: ['table', 'grid'],
@@ -114,7 +392,7 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'NOC Console',
     description: 'Triage teknis, verifikasi sinyal, dan closing tiket.',
     navigationCategory: 'operasional',
-    navigationOrder: 3,
+    navigationOrder: 9,
     searchPlaceholder: 'Cari tiket, ODP, user PPPoE, atau serial ONT...',
     quickAction: null,
     viewFormats: ['table', 'grid'],
@@ -124,7 +402,7 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'Lead Technician Workspace',
     description: 'Assign work order, review SOP, dan monitoring teknisi.',
     navigationCategory: 'operasional',
-    navigationOrder: 4,
+    navigationOrder: 10,
     searchPlaceholder: 'Cari WO, pelanggan, atau teknisi lapangan...',
     quickAction: null,
     viewFormats: ['table', 'grid'],
@@ -134,7 +412,7 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'Portal Teknisi Lapangan',
     description: 'Eksekusi WO, bukti kerja, dan laporan on-site.',
     navigationCategory: 'operasional',
-    navigationOrder: 5,
+    navigationOrder: 11,
     quickAction: null,
     viewFormats: ['table'],
   },
@@ -143,7 +421,7 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'Finance Desk',
     description: 'Billing pelanggan dan approval procurement finance.',
     navigationCategory: 'operasional',
-    navigationOrder: 6,
+    navigationOrder: 12,
     searchPlaceholder: 'Cari pelanggan, tagihan, PPPoE user, atau status layanan...',
     quickAction: null,
     viewFormats: ['table', 'grid'],
@@ -153,7 +431,7 @@ export const MODULE_META: Record<AppModule, ModuleMeta> = {
     label: 'Warehouse Console',
     description: 'Stok barang, serial aset, dan permintaan pengadaan.',
     navigationCategory: 'operasional',
-    navigationOrder: 7,
+    navigationOrder: 13,
     searchPlaceholder: 'Cari barang, kode item, brand, atau serial number...',
     quickAction: 'new_procurement',
     viewFormats: ['table', 'grid'],
@@ -264,7 +542,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Master data, akun login, role, mapping, dan audit aplikasi.',
     shellMode: 'admin',
     defaultModule: 'dashboard',
-    allowedModules: ['dashboard', 'service_registrations', 'helpdesk', 'noc', 'lead_tech', 'field_tech', 'finance', 'inventory', 'kanban', 'network_map', 'admin_users', 'admin_roles', 'admin_master', 'admin_modules', 'admin_module_roles', 'admin_mappings', 'admin_audit'],
+    allowedModules: ['dashboard', 'about', 'pelanggan', 'penagihan', 'request_pppoe_noc', 'request_rembes', 'approval_rembes_finance', 'laporan_keuangan', 'panel_kepala_teknisi', 'panel_teknisi_lapangan', 'pengerjaan_instalasi_lapangan', 'qc_instalasi_noc', 'registrasi_pelanggan_baru', 'validasi_registrasi', 'survey_instalasi', 'request_gudang_instalasi', 'aktivasi_instalasi', 'service_registrations', 'helpdesk', 'noc', 'lead_tech', 'field_tech', 'finance', 'inventory', 'kanban', 'network_map', 'admin_users', 'admin_roles', 'admin_master', 'admin_modules', 'admin_module_roles', 'admin_mappings', 'admin_audit'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Modul Administrasi Sistem',
     workspaceLabel: 'Admin Menu',
@@ -277,7 +555,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Dashboard pasang baru untuk prospek, draft registrasi, dan handoff ke finance.',
     shellMode: 'compact',
     defaultModule: 'service_registrations',
-    allowedModules: ['service_registrations', 'kanban'],
+    allowedModules: ['service_registrations', 'request_rembes', 'kanban'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Pipeline Sales',
     workspaceLabel: 'Sales Menu',
@@ -290,7 +568,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Analitik bisnis, approval manajemen, dan monitoring kinerja.',
     shellMode: 'analytics',
     defaultModule: 'dashboard',
-    allowedModules: ['dashboard'],
+    allowedModules: ['dashboard', 'request_rembes', 'approval_rembes_finance', 'laporan_keuangan'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Ringkasan Manajemen',
     workspaceLabel: 'Executive View',
@@ -303,7 +581,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Intake aduan pelanggan dan tindak lanjut tiket.',
     shellMode: 'compact',
     defaultModule: 'helpdesk',
-    allowedModules: ['helpdesk', 'kanban'],
+    allowedModules: ['helpdesk', 'request_rembes', 'kanban'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Modul Helpdesk',
     workspaceLabel: 'Helpdesk Menu',
@@ -316,7 +594,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Home pasang baru untuk validasi ODP, PPPoE, dispatch, dan final verify instalasi.',
     shellMode: 'compact',
     defaultModule: 'service_registrations',
-    allowedModules: ['noc', 'service_registrations', 'network_map', 'kanban'],
+    allowedModules: ['noc', 'request_pppoe_noc', 'qc_instalasi_noc', 'service_registrations', 'request_rembes', 'network_map', 'kanban'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Pipeline NOC',
     workspaceLabel: 'NOC Menu',
@@ -325,26 +603,26 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
   },
   lead_tech: {
     role: 'lead_tech',
-    title: 'Lead Technician Pipeline',
-    subtitle: 'Home pasang baru untuk dispatch, assignment teknisi, dan kontrol antrean lapangan.',
+    title: 'Panel Kepala Teknisi',
+    subtitle: 'Serah terima pemasangan siap jalan, kontrol distribusi WO, dan assignment teknisi lapangan.',
     shellMode: 'compact',
-    defaultModule: 'service_registrations',
-    allowedModules: ['lead_tech', 'service_registrations', 'kanban'],
+    defaultModule: 'panel_kepala_teknisi',
+    allowedModules: ['panel_kepala_teknisi', 'lead_tech', 'request_rembes', 'kanban'],
     homeLabel: 'Dashboards',
-    navigationLabel: 'Pipeline Lead Tech',
+    navigationLabel: 'Panel Kepala Teknisi',
     workspaceLabel: 'Lead Tech Menu',
     showSearchShortcut: true,
     showSidebarNavigation: true,
   },
   field_tech: {
     role: 'field_tech',
-    title: 'Portal Teknisi Lapangan',
-    subtitle: 'Work order saya, data pelanggan, dan laporan on-site.',
+    title: 'Panel Teknisi Lapangan',
+    subtitle: 'Ringkasan pekerjaan saya, antrean tugas aktif, dan akses ke halaman kerja instalasi.',
     shellMode: 'standalone',
-    defaultModule: 'field_tech',
-    allowedModules: ['field_tech'],
+    defaultModule: 'panel_teknisi_lapangan',
+    allowedModules: ['panel_teknisi_lapangan', 'pengerjaan_instalasi_lapangan', 'field_tech', 'request_rembes'],
     homeLabel: 'Dashboards',
-    navigationLabel: 'Workspace Teknisi',
+    navigationLabel: 'Panel Teknisi',
     workspaceLabel: 'Field Tech',
     showSearchShortcut: true,
     showSidebarNavigation: true,
@@ -355,7 +633,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Home pasang baru untuk review biaya, deposit, dan approval registrasi baru.',
     shellMode: 'compact',
     defaultModule: 'service_registrations',
-    allowedModules: ['finance', 'service_registrations', 'kanban'],
+    allowedModules: ['finance', 'pelanggan', 'penagihan', 'request_rembes', 'approval_rembes_finance', 'laporan_keuangan', 'service_registrations', 'kanban'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Pipeline Finance',
     workspaceLabel: 'Finance Menu',
@@ -368,7 +646,7 @@ export const ROLE_WORKSPACES: Record<KnownUserRole, RoleWorkspaceConfig> = {
     subtitle: 'Stok gudang, inventaris, dan pengadaan barang.',
     shellMode: 'compact',
     defaultModule: 'inventory',
-    allowedModules: ['inventory', 'kanban'],
+    allowedModules: ['inventory', 'request_rembes', 'kanban'],
     homeLabel: 'Dashboards',
     navigationLabel: 'Modul Gudang',
     workspaceLabel: 'Warehouse Menu',
@@ -383,17 +661,38 @@ export const getRoleWorkspace = (role: UserRole): RoleWorkspaceConfig => (
 
 export const getDefaultModuleForRole = (role: UserRole): AppModule => getRoleWorkspace(role).defaultModule;
 
-export const getResolvedAllowedModules = (role: UserRole, navigationConfig?: NavigationConfig | null): AppModule[] => {
-  const fallbackModules = getRoleWorkspace(role).allowedModules;
-  const mappedModules = navigationConfig?.allowedModuleKeys?.length
-    ? navigationConfig.allowedModuleKeys.filter((moduleKey): moduleKey is AppModule => Object.prototype.hasOwnProperty.call(MODULE_META, moduleKey))
-    : fallbackModules;
-
+export const getDashboardModuleForRole = (
+  role: UserRole,
+  preferredDashboardModule?: string | null,
+): AppModule => {
   if (role === 'superadmin') {
-    return Array.from(new Set([...mappedModules, ...SUPERADMIN_DASHBOARD_MODULES]));
+    return 'dashboard';
   }
 
-  return mappedModules;
+  if (
+    preferredDashboardModule &&
+    isFallbackImplementedAppModule(preferredDashboardModule) &&
+    !SUPERADMIN_DASHBOARD_MODULES.includes(preferredDashboardModule)
+  ) {
+    return preferredDashboardModule;
+  }
+
+  return getDefaultModuleForRole(role);
+};
+
+export const getResolvedAllowedModules = (role: UserRole, navigationConfig?: NavigationConfig | null): AppModule[] => {
+  const fallbackModules = getRoleWorkspace(role).allowedModules;
+  const hasNavigationConfig = navigationConfig !== undefined && navigationConfig !== null;
+  const mappedModules = navigationConfig?.allowedModuleKeys?.filter((moduleKey): moduleKey is AppModule => (
+    Object.prototype.hasOwnProperty.call(MODULE_META, moduleKey)
+  )) ?? [];
+  const resolvedModules = hasNavigationConfig ? mappedModules : fallbackModules;
+
+  if (role === 'superadmin') {
+    return Array.from(new Set(['dashboard', ...resolvedModules, ...SUPERADMIN_DASHBOARD_MODULES]));
+  }
+
+  return resolvedModules;
 };
 
 export const isModuleAllowedForRole = (role: UserRole, module: AppModule): boolean =>
@@ -423,4 +722,60 @@ export const getNavigationSectionsForRole = (role: UserRole) => {
       modules: grouped[category.id] ?? [],
     }))
     .filter((category) => category.modules.length > 0);
+};
+
+export const getNavigationSections = (role: UserRole, navigationConfig?: NavigationConfig | null): NavigationSection[] => {
+  if (navigationConfig) {
+    const configuredSections = navigationConfig.heads
+      .sort((left, right) => left.order - right.order)
+      .map((head) => ({
+        id: head.key,
+        label: head.label,
+        searchLabel: head.label,
+        order: head.order,
+        modules: navigationConfig.modules
+          .filter((module) =>
+            module.navigationHeadKey === head.key &&
+            navigationConfig.allowedModuleKeys.includes(module.key) &&
+            isFallbackImplementedAppModule(module.key),
+          )
+          .sort((left, right) => left.order - right.order)
+          .map((module) => ({
+            id: module.key as AppModule,
+            label: module.label,
+            description: module.description,
+            routeTarget: resolveFallbackRouteTarget(module.routeTarget, module.key),
+          })),
+      }))
+      .filter((head) => head.modules.length > 0);
+
+    if (configuredSections.length > 0) {
+      return configuredSections;
+    }
+
+    return role === 'superadmin'
+      ? getNavigationSectionsForRole(role).map((section) => ({
+          ...section,
+          modules: section.modules
+            .filter((module) => !SUPERADMIN_DASHBOARD_MODULES.includes(module.id))
+            .map((module) => ({
+              id: module.id,
+              label: module.label,
+              description: module.description,
+              routeTarget: getFallbackRoutePathForModule(module.id),
+            })),
+        }))
+        .filter((section) => section.modules.length > 0)
+      : [];
+  }
+
+  return getNavigationSectionsForRole(role).map((section) => ({
+    ...section,
+    modules: section.modules.map((module) => ({
+      id: module.id,
+      label: module.label,
+      description: module.description,
+      routeTarget: getFallbackRoutePathForModule(module.id),
+    })),
+  }));
 };
