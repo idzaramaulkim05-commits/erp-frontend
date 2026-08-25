@@ -6,3 +6,12 @@ coverage/
 *.log
 .env*
 !.env.example
+dist-backup-20260825-124643/index.html
+dist-backup-20260825-124643/assets/index-BrrZMJHn.css
+dist-backup-20260825-124643/assets/index-vXS3T4Ux.js
+dist-backup-20260825-rembes-optional/index.html
+dist-backup-20260825-reqrembes/assets/index-BtR807w7.css
+dist-backup-20260825-reqrembes/assets/index-BoYS0-Sq.js
+dist-backup-20260825-reqrembes/index.html
+dist-backup-20260825-rembes-optional/assets/index-BsGkgWYk.js
+dist-backup-20260825-rembes-optional/assets/index-BrrZMJHn.css
