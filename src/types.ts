@@ -32,6 +32,7 @@ export type AppModule =
   | 'aktivasi_instalasi'
   | 'service_registrations'
   | 'helpdesk'
+  | 'buat_tiket'
   | 'noc'
   | 'lead_tech'
   | 'field_tech'

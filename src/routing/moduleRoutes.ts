@@ -22,6 +22,7 @@ export const MODULE_ROUTE_MAP: Record<AppModule, string> = {
   aktivasi_instalasi: '/app/aktivasi-instalasi',
   service_registrations: '/app/service-registrations',
   helpdesk: '/app/helpdesk',
+  buat_tiket: '/app/buat-tiket',
   noc: '/app/noc',
   lead_tech: '/app/lead-tech',
   field_tech: '/app/field-tech',

@@ -14,6 +14,7 @@ import { HeaderNavbar } from './components/HeaderNavbar';
 
 // Views
 import { HelpdeskView } from './components/views/HelpdeskView';
+import { BuatTiketView } from './components/views/BuatTiketView';
 import { ServiceRegistrationsView } from './components/views/ServiceRegistrationsView';
 import { NOCDashboardView } from './components/views/NOCDashboardView';
 import { FinanceBillingView } from './components/views/FinanceBillingView';
@@ -193,6 +194,12 @@ const MainIOMSApp: React.FC = () => {
             onSelectTicket={(ticket) => setSelectedTicketDetail(ticket)}
           />
         );
+      case 'buat_tiket':
+        return (
+          <BuatTiketView
+            onSelectTicket={(ticket) => setSelectedTicketDetail(ticket)}
+          />
+        );
       case 'noc':
         return (
           <NOCDashboardView
@@ -350,6 +357,7 @@ export default function App() {
             <Route path="/app/aktivasi-instalasi" element={<MainIOMSApp />} />
             <Route path="/app/service-registrations" element={<MainIOMSApp />} />
             <Route path="/app/helpdesk" element={<MainIOMSApp />} />
+            <Route path="/app/buat-tiket" element={<MainIOMSApp />} />
             <Route path="/app/noc" element={<MainIOMSApp />} />
             <Route path="/app/lead-tech" element={<MainIOMSApp />} />
             <Route path="/app/field-tech" element={<MainIOMSApp />} />

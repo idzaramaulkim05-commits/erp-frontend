@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
@@ -83,6 +84,7 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
   onOpenNewTicket,
   onSelectTicket,
 }) => {
+  const navigate = useNavigate();
   const {
     tickets,
     searchQuery,
@@ -289,7 +291,7 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
 
           <button
             type="button"
-            onClick={onOpenNewTicket}
+            onClick={() => navigate('/app/buat-tiket')}
             className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
           >
             <HelpCircle className="h-4 w-4" />
