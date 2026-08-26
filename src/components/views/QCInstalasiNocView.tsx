@@ -26,7 +26,7 @@ export const QCInstalasiNocView: React.FC = () => {
   const { authFetch } = useAuth();
   const [items, setItems] = useState<WorkOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [opticalPower, setOpticalPower] = useState('-20.3');
+  const [opticalPower, setOpticalPower] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export const QCInstalasiNocView: React.FC = () => {
       if (typeof selected.finalOpticalPowerDbm === 'number') {
         setOpticalPower(String(selected.finalOpticalPowerDbm));
       } else {
-        setOpticalPower('-20.3');
+        setOpticalPower('');
       }
     }
   }, [selected?.id]);
@@ -268,21 +268,21 @@ export const QCInstalasiNocView: React.FC = () => {
                   <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-200">
                     <span className="text-[10px] text-slate-400 block font-bold">Username PPPoE</span>
                     <strong className="font-mono text-emerald-800 block truncate">
-                      {String(selected.networkCredentials?.pppoeUsername ?? selected.customerName?.toLowerCase().replace(/\s+/g, '') + '@isp.net')}
+                      {selected.networkCredentials?.pppoeUsername ? String(selected.networkCredentials.pppoeUsername) : '-'}
                     </strong>
                   </div>
 
                   <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-200">
                     <span className="text-[10px] text-slate-400 block font-bold">Password PPPoE</span>
                     <strong className="font-mono text-emerald-800 block truncate">
-                      {String(selected.networkCredentials?.pppoePassword ?? '******')}
+                      {selected.networkCredentials?.pppoePassword ? String(selected.networkCredentials.pppoePassword) : '-'}
                     </strong>
                   </div>
 
                   <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-200">
                     <span className="text-[10px] text-slate-400 block font-bold">VLAN</span>
                     <strong className="font-mono text-slate-800 block">
-                      {String(selected.networkCredentials?.vlan ?? '100')}
+                      {selected.networkCredentials?.vlan ? String(selected.networkCredentials.vlan) : '-'}
                     </strong>
                   </div>
 

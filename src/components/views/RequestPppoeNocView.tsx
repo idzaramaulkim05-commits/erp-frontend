@@ -48,24 +48,38 @@ export const RequestPppoeNocView: React.FC = () => {
 
   useEffect(() => {
     if (!selected) {
+      setPppoeUsername('');
+      setPppoePassword('');
+      setVlan('');
+      setNotes('');
       return;
     }
 
     setSelectedId(selected.id);
-    setPppoeUsername(String(selected.networkCredentials?.pppoeUsername ?? `${selected.id.toLowerCase()}@isp.net`));
-    setPppoePassword(String(selected.networkCredentials?.pppoePassword ?? ''));
-    setVlan(String(selected.networkCredentials?.vlan ?? ''));
-    setNotes('PPPoE pasang baru sudah diisi dan siap dipakai teknisi lapangan.');
+    // Do not pre-fill dummy values: start empty so NOC engineer types the real configuration
+    setPppoeUsername('');
+    setPppoePassword('');
+    setVlan('');
+    setNotes('');
   }, [selected?.id]);
 
   const openApproveModal = () => {
     if (!selected) return;
+    if (!pppoeUsername.trim()) {
+      setError('Username PPPoE wajib diisi sebelum melakukan approval.');
+      return;
+    }
+    if (!pppoePassword.trim()) {
+      setError('Password PPPoE wajib diisi sebelum melakukan approval.');
+      return;
+    }
+    setError(null);
     setActionState({ type: 'approve', workOrder: selected });
   };
 
   const openRejectModal = () => {
     if (!selected) return;
-    setNotes('Data permintaan PPPoE belum lengkap, mohon dicek ulang oleh teknisi lapangan.');
+    setError(null);
     setActionState({ type: 'reject', workOrder: selected });
   };
 
@@ -78,20 +92,36 @@ export const RequestPppoeNocView: React.FC = () => {
   const handleConfirm = async () => {
     if (!actionState) return;
 
+    if (actionState.type === 'approve') {
+      if (!pppoeUsername.trim()) {
+        setError('Username PPPoE wajib diisi.');
+        return;
+      }
+      if (!pppoePassword.trim()) {
+        setError('Password PPPoE wajib diisi.');
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
       if (actionState.type === 'approve') {
         await approveWorkOrderPppoe(actionState.workOrder.id, {
-          pppoeUsername,
-          pppoePassword,
+          pppoeUsername: pppoeUsername.trim(),
+          pppoePassword: pppoePassword.trim(),
           vlan: vlan.trim() || null,
-          notes,
+          notes: notes.trim() || undefined,
         });
       } else {
-        await rejectWorkOrderPppoe(actionState.workOrder.id, notes);
+        await rejectWorkOrderPppoe(actionState.workOrder.id, notes.trim() || 'Data permintaan PPPoE ditolak/perlu dicek ulang oleh teknisi lapangan.');
       }
       setActionState(null);
+      // Reset form after successful action
+      setPppoeUsername('');
+      setPppoePassword('');
+      setVlan('');
+      setNotes('');
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Aksi PPPoE gagal diproses.');
     } finally {
@@ -190,20 +220,22 @@ export const RequestPppoeNocView: React.FC = () => {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-bold text-slate-700">Username PPPoE</span>
+                  <span className="text-sm font-bold text-slate-700">Username PPPoE <span className="text-rose-500">*</span></span>
                   <input
                     type="text"
                     value={pppoeUsername}
                     onChange={(event) => setPppoeUsername(event.target.value)}
+                    placeholder="Masukkan username PPPoE..."
                     className="h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-bold text-slate-700">Password PPPoE</span>
+                  <span className="text-sm font-bold text-slate-700">Password PPPoE <span className="text-rose-500">*</span></span>
                   <input
                     type="text"
                     value={pppoePassword}
                     onChange={(event) => setPppoePassword(event.target.value)}
+                    placeholder="Masukkan password PPPoE..."
                     className="h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
@@ -214,15 +246,16 @@ export const RequestPppoeNocView: React.FC = () => {
                     value={vlan}
                     onChange={(event) => setVlan(event.target.value)}
                     className="h-14 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-                    placeholder="Opsional"
+                    placeholder="Contoh: 100, 200 (opsional)"
                   />
                 </label>
                 <label className="space-y-2 md:col-span-2">
-                  <span className="text-sm font-bold text-slate-700">Catatan NOC</span>
+                  <span className="text-sm font-bold text-slate-700">Catatan NOC (Opsional)</span>
                   <textarea
                     value={notes}
                     onChange={(event) => setNotes(event.target.value)}
                     rows={4}
+                    placeholder="Tuliskan catatan teknis untuk teknisi lapangan (opsional)..."
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                   />
                 </label>
