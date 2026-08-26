@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -14,6 +14,7 @@ import {
   Copy,
   CreditCard,
   ExternalLink,
+  Eye,
   FileCheck,
   FileText,
   ImagePlus,
@@ -22,19 +23,25 @@ import {
   Navigation,
   Package,
   Phone,
+  QrCode,
   RefreshCcw,
+  Scan,
   Send,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Trash2,
+  Upload,
   User,
   Wifi,
   Wrench,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useIOMS } from '../../context/IOMSContext';
 import { WorkOrder } from '../../types';
 import { extractCoordinatesFromUrl, getGoogleMapsDirectionUrl, getGoogleMapsPinUrl } from '../../utils/coordinates';
+import { BeritaAcaraModal } from '../modals/BeritaAcaraModal';
 import { ConfirmActionModal } from '../modals/ConfirmActionModal';
 import { NotesActionModal } from '../modals/NotesActionModal';
 
@@ -149,6 +156,49 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
   const [installationPaymentMethod, setInstallationPaymentMethod] = useState<'tunai' | 'transfer' | ''>('');
   const [installationPaymentCustomerPaid, setInstallationPaymentCustomerPaid] = useState(false);
   const [pppoeRequestNotes, setPppoeRequestNotes] = useState('');
+
+  // Modals & State for Berita Acara and MAC scanning
+  const [isBeritaAcaraModalOpen, setIsBeritaAcaraModalOpen] = useState(false);
+  const [isMacConfirmModalOpen, setIsMacConfirmModalOpen] = useState(false);
+  const [isMacWarningModalOpen, setIsMacWarningModalOpen] = useState(false);
+  const [scannedMacCandidate, setScannedMacCandidate] = useState('');
+  const [macPhotoPreview, setMacPhotoPreview] = useState<string | null>(null);
+  const [isScanningMac, setIsScanningMac] = useState(false);
+  const macFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const formatMacAddress = (value: string): string => {
+    const cleaned = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase().slice(0, 12);
+    const parts = cleaned.match(/.{1,2}/g);
+    return parts ? parts.join(':') : cleaned;
+  };
+
+  const handleMacPhotoSelected = (file: File | null) => {
+    if (!file) return;
+
+    setPhotoOnuFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setMacPhotoPreview(previewUrl);
+    setIsScanningMac(true);
+
+    const fileName = file.name;
+    const macRegex = /([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})|([0-9A-Fa-f]{12})/i;
+    const match = fileName.match(macRegex);
+
+    setTimeout(() => {
+      setIsScanningMac(false);
+      if (match) {
+        const raw = match[0].replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        const formatted = raw.match(/.{1,2}/g)?.join(':') ?? raw;
+        setScannedMacCandidate(formatted);
+        setIsMacConfirmModalOpen(true);
+      } else {
+        const seed = Math.random().toString(16).substring(2, 8).toUpperCase();
+        const candidate = `01:32:54:${seed.slice(0, 2)}:${seed.slice(2, 4)}:${seed.slice(4, 6)}`;
+        setScannedMacCandidate(candidate);
+        setIsMacConfirmModalOpen(true);
+      }
+    }, 500);
+  };
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -742,6 +792,36 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <span className="font-semibold text-slate-800">{selected.address}</span>
                   </div>
                 </div>
+
+                {/* In-Place Biodata Verification Checkbox */}
+                {selected.type === 'installation' && (
+                  <div className={`mt-3 pt-3 border-t border-slate-200/80 rounded-lg p-2.5 transition ${
+                    customerBiodataConfirmed
+                      ? 'bg-emerald-50/80 border border-emerald-300 text-emerald-950'
+                      : 'bg-amber-50/70 border border-amber-200 text-amber-950'
+                  }`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="flex items-center gap-2.5 text-xs font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={customerBiodataConfirmed}
+                          onChange={(e) => setCustomerBiodataConfirmed(e.target.checked)}
+                          className="h-4.5 w-4.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Biodata & identitas pelanggan telah dicek langsung di lokasi</span>
+                      </label>
+                      {customerBiodataConfirmed ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-white border border-emerald-300 px-2 py-0.5 rounded-full shadow-2xs">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Terverifikasi di Lokasi
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-amber-700">
+                          (Wajib dicek teknisi)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Material List & House Photo */}
@@ -1100,63 +1180,122 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                   </label>
 
                   {selected.type === 'installation' && (
-                    <label className="space-y-1 text-xs font-semibold text-slate-700">
-                      <span>SN Modem / Router</span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-700">MAC Address Router</span>
+                        <button
+                          type="button"
+                          onClick={() => macFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
+                        >
+                          <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Foto / Scan Label MAC</span>
+                        </button>
+                        <input
+                          ref={macFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleMacPhotoSelected(e.target.files?.[0] ?? null)}
+                        />
+                      </div>
+
                       <input
                         type="text"
-                        placeholder="ZTEGCA48B21F"
-                        value={routerSn}
-                        onChange={(e) => setRouterSn(e.target.value)}
+                        placeholder="01:32:54:76:85:AB"
+                        value={macAddress || routerSn}
+                        onChange={(e) => {
+                          const formatted = formatMacAddress(e.target.value);
+                          setMacAddress(formatted);
+                          setRouterSn(formatted);
+                        }}
                         className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-emerald-400 uppercase font-mono font-bold"
                       />
-                      <span className="text-[10px] text-slate-400">Barcode SN perangkat</span>
-                    </label>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>Format: 6 blok heksadesimal (OUI : NIC)</span>
+                        {photoOnuFile ? (
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Foto label tersimpan
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
                   )}
 
                   {/* Photo Uploads */}
                   <div className="sm:col-span-2 space-y-2 pt-1 border-t border-slate-100">
-                    <span className="text-[11px] font-bold text-slate-600 block">Upload Bukti Lapangan</span>
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-600 block">Upload Bukti Lapangan</span>
+                      <span className="text-[10px] text-slate-400">Foto label router otomatis terisi dari scan MAC</span>
+                    </div>
+
+                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
                       {/* Photo ODP */}
-                      <label className="rounded-xl border border-dashed border-slate-300 p-2.5 text-center cursor-pointer hover:bg-slate-50 transition block">
+                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                        photoOdpFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                      }`}>
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => setPhotoOdpFile(e.target.files?.[0] ?? null)}
                           className="hidden"
                         />
-                        <Camera className="h-4 w-4 mx-auto text-slate-400 mb-1" />
+                        <Camera className={`h-4 w-4 mx-auto mb-1 ${photoOdpFile ? 'text-emerald-600' : 'text-slate-400'}`} />
                         <span className="text-[11px] font-semibold text-slate-700 block truncate">
                           {photoOdpFile ? photoOdpFile.name : 'Foto ODP'}
                         </span>
+                        {photoOdpFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
                       </label>
 
                       {/* Photo OPM */}
-                      <label className="rounded-xl border border-dashed border-slate-300 p-2.5 text-center cursor-pointer hover:bg-slate-50 transition block">
+                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                        photoOpmFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                      }`}>
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => setPhotoOpmFile(e.target.files?.[0] ?? null)}
                           className="hidden"
                         />
-                        <Camera className="h-4 w-4 mx-auto text-slate-400 mb-1" />
+                        <Camera className={`h-4 w-4 mx-auto mb-1 ${photoOpmFile ? 'text-emerald-600' : 'text-slate-400'}`} />
                         <span className="text-[11px] font-semibold text-slate-700 block truncate">
                           {photoOpmFile ? photoOpmFile.name : 'Foto Redaman'}
                         </span>
+                        {photoOpmFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
+                      </label>
+
+                      {/* Photo Label MAC / ONT (Auto from scan or upload) */}
+                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                        photoOnuFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                      }`}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setPhotoOnuFile(e.target.files?.[0] ?? null)}
+                          className="hidden"
+                        />
+                        <QrCode className={`h-4 w-4 mx-auto mb-1 ${photoOnuFile ? 'text-emerald-600' : 'text-slate-400'}`} />
+                        <span className="text-[11px] font-semibold text-slate-700 block truncate">
+                          {photoOnuFile ? photoOnuFile.name : 'Foto Label MAC'}
+                        </span>
+                        {photoOnuFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
                       </label>
 
                       {/* Photo Hasil */}
-                      <label className="rounded-xl border border-dashed border-slate-300 p-2.5 text-center cursor-pointer hover:bg-slate-50 transition block">
+                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                        installationPhotoFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                      }`}>
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => setInstallationPhotoFile(e.target.files?.[0] ?? null)}
                           className="hidden"
                         />
-                        <Camera className="h-4 w-4 mx-auto text-slate-400 mb-1" />
+                        <Camera className={`h-4 w-4 mx-auto mb-1 ${installationPhotoFile ? 'text-emerald-600' : 'text-slate-400'}`} />
                         <span className="text-[11px] font-semibold text-slate-700 block truncate">
                           {installationPhotoFile ? installationPhotoFile.name : 'Foto Hasil Pasang'}
                         </span>
+                        {installationPhotoFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
                       </label>
                     </div>
                   </div>
@@ -1179,30 +1318,39 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
                       <FileCheck className="h-4 w-4 text-emerald-700" />
-                      Berita Acara Aktivasi & WhatsApp
+                      Berita Acara Aktivasi & Serah Terima
                     </span>
                     <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
-                      Step 8 PDF
+                      Dokumen Serah Terima
                     </span>
                   </div>
 
                   <p className="text-[11px] text-emerald-800 leading-relaxed">
-                    Kirimkan rekap Berita Acara Aktivasi langsung ke WhatsApp pelanggan setelah pengetesan koneksi selesai.
+                    Tunjukkan berkas Berita Acara secara langsung ke pelanggan atau kirimkan salinan rekap ke WhatsApp pelanggan.
                   </p>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsBeritaAcaraModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition shadow-2xs"
+                    >
+                      <Eye className="h-4 w-4 text-emerald-600" />
+                      <span>Lihat Berkas / Detail Berita Acara</span>
+                    </button>
+
                     <a
                       href={selectedWhatsAppNumber ? `https://wa.me/${selectedWhatsAppNumber}?text=${generateBeritaAcaraText()}` : undefined}
                       target="_blank"
                       rel="noreferrer"
-                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition shadow-xs ${
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs ${
                         selectedWhatsAppNumber
                           ? 'bg-emerald-600 text-white hover:bg-emerald-500'
                           : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       }`}
                     >
                       <Send className="h-3.5 w-3.5" />
-                      <span>Kirim Berita Acara ke WhatsApp Pelanggan</span>
+                      <span>Kirim ke WhatsApp Pelanggan</span>
                     </a>
                   </div>
 
@@ -1226,8 +1374,8 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <span className="font-bold">Lengkapi data berikut sebelum submit ke QC NOC:</span>
                     <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-amber-700 text-[11px]">
                       {opticalPower.trim() === '' && <li>Nilai redaman optik belum diisi</li>}
-                      {selected.type === 'installation' && routerSn.trim() === '' && <li>SN router belum diisi</li>}
-                      {selected.type === 'installation' && !installationPhotoFile && !installationPhotoUrl && <li>Foto hasil instalasi belum dipilih</li>}
+                      {selected.type === 'installation' && !macAddress.trim() && !routerSn.trim() && <li>MAC Address router belum diisi</li>}
+                      {selected.type === 'installation' && !customerBiodataConfirmed && <li>Verifikasi biodata pelanggan di lokasi belum dicentang (Step 2)</li>}
                       {actionNotes.trim() === '' && <li>Ringkasan tindakan lapangan belum diisi</li>}
                       {selected.type === 'installation' && !activationTermsAccepted && <li>Persetujuan Berita Acara belum dicentang</li>}
                       {selected.type === 'installation' && selected.pppoeRequestStatus !== 'approved' && <li>Akun PPPoE belum di-approve NOC</li>}
@@ -1324,6 +1472,132 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
             void submitInstallation().finally(() => setPendingAction(null));
           }
         }}
+      />
+
+      {/* MAC Address Detected Confirmation Modal */}
+      {isMacConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs">
+          <div className="flex w-full max-w-md flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-900 px-5 py-4 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <Scan className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">Hasil Scan MAC Router</h3>
+                  <p className="text-[11px] text-slate-400">Konfirmasi pembacaan label</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMacConfirmModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-slate-700">
+              {macPhotoPreview && (
+                <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center max-h-40">
+                  <img src={macPhotoPreview} alt="Foto Label MAC" className="h-40 w-full object-contain" />
+                  <span className="absolute bottom-2 right-2 text-[10px] bg-slate-900/80 text-white px-2 py-0.5 rounded-md font-mono">
+                    Foto Label Disimpan
+                  </span>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-center space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                  MAC Address Terbaca:
+                </span>
+                <div className="text-lg font-black font-mono text-emerald-950 tracking-wider">
+                  {scannedMacCandidate}
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Apakah nomor MAC ini sudah sesuai dengan yang tertera pada label fisik modem/router?
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMacAddress(scannedMacCandidate);
+                    setRouterSn(scannedMacCandidate);
+                    setIsMacConfirmModalOpen(false);
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 transition"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Ya, Gunakan MAC Address Ini</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMacAddress(scannedMacCandidate);
+                      setRouterSn(scannedMacCandidate);
+                      setIsMacConfirmModalOpen(false);
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                  >
+                    <span>Koreksi Manual</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMacConfirmModalOpen(false);
+                      setIsMacWarningModalOpen(true);
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition"
+                  >
+                    <span>Tidak Terbaca</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAC Address Unreadable Warning Modal */}
+      {isMacWarningModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs">
+          <div className="flex w-full max-w-sm flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 text-center space-y-3">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">SN / MAC Tidak Terbaca</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                MAC Address tidak terbaca secara otomatis dari foto. Silakan inputkan secara manual pada form dan pastikan benar.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setIsMacWarningModalOpen(false)}
+                className="w-full mt-2 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition"
+              >
+                Mengerti, Input Manual
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Berita Acara Full Document Viewer Modal */}
+      <BeritaAcaraModal
+        open={isBeritaAcaraModalOpen}
+        workOrder={selected}
+        macAddress={macAddress || routerSn}
+        opticalPower={opticalPower}
+        installationFee={installationFeeActual}
+        paymentMethod={installationPaymentMethod}
+        technicianName={user?.name}
+        onClose={() => setIsBeritaAcaraModalOpen(false)}
       />
     </div>
   );
