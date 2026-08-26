@@ -5,16 +5,19 @@ import {
   CalendarClock,
   Download,
   Eye,
+  FileSpreadsheet,
   MapPin,
   Phone,
   Plus,
   Search,
+  UploadCloud,
   UserX,
   Wifi,
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
 import { Customer, CustomerStatus } from '../../types';
 import { ConfirmActionModal } from '../modals/ConfirmActionModal';
+import { CustomerExcelImportModal } from '../modals/CustomerExcelImportModal';
 
 type CustomerStatusTab = 'semua' | 'aktif' | 'nonaktif';
 type CustomerSortKey = 'name' | 'due_date';
@@ -224,13 +227,16 @@ const CustomerDetailModal: React.FC<{
 
 export const PelangganView: React.FC = () => {
   const navigate = useNavigate();
-  const { customers, updateCustomerStatus } = useIOMS();
+  const { customers, updateCustomerStatus, activeRole, currentUser } = useIOMS();
+  const isSuperadmin = activeRole === 'superadmin' || currentUser?.role === 'superadmin';
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusTab, setStatusTab] = useState<CustomerStatusTab>('semua');
   const [sortKey, setSortKey] = useState<CustomerSortKey>('name');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<Customer | null>(null);
   const [uninstallLoading, setUninstallLoading] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const filteredCustomers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -314,6 +320,16 @@ export const PelangganView: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {isSuperadmin && (
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-linear-to-r from-emerald-600 to-teal-600 px-5 py-3 text-sm font-bold text-white transition hover:from-emerald-700 hover:to-teal-700 shadow-xs"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Import Excel
+              </button>
+            )}
             <button
               type="button"
               onClick={handleExport}
@@ -333,6 +349,66 @@ export const PelangganView: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {isSuperadmin && (
+        <section className="rounded-3xl border border-emerald-200/90 bg-linear-to-r from-emerald-50/90 via-teal-50/60 to-white p-5 shadow-xs">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-emerald-600 text-white shadow-xs shrink-0">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider">
+                    Superadmin Only
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-950">Panel Import Data Pelanggan via Excel</h3>
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Unggah file excel untuk menambahkan banyak pelanggan sekaligus lengkap dengan pengecekan kelayakan, validasi nomor HP, ODP, dan konfirmasi sebelum import.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const csvContent =
+                    '\uFEFF' +
+                    'Nama Pelanggan,NIK,Nomor HP,Alamat,Wilayah,Paket Layanan,Tarif Bulanan,ODP ID,Status Pembayaran\n' +
+                    'Budi Santoso,3201123456780001,081234567890,Jl. Mawar No. 12 RT 01 RW 02,Denpasar,Home 50 Mbps,300000,ODP-DPS-01,Lunas\n' +
+                    'Siti Aminah,3201987654320002,081987654321,Jl. Melati No. 45,Badung,Home 30 Mbps,200000,ODP-BDG-01,Lunas\n' +
+                    'I Wayan Koster,5101012345670003,082134567899,Jl. Gatot Subroto No. 88,Denpasar,Business 100 Mbps,500000,,Lunas\n';
+
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.setAttribute('download', 'template_import_pelanggan.csv');
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Download Template</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Upload & Cek Data</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4">
@@ -525,6 +601,10 @@ export const PelangganView: React.FC = () => {
         onConfirm={() => {
           void handleConfirmUninstall();
         }}
+      />
+      <CustomerExcelImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
       />
     </div>
   );
