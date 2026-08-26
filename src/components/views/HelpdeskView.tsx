@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   HelpCircle,
   Layers3,
@@ -76,6 +77,8 @@ const getCategoryMeta = (category: string): { label: string; tone: 'emerald' | '
   }
 };
 
+const ITEMS_PER_PAGE = 5;
+
 export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
   onOpenNewTicket,
   onSelectTicket,
@@ -89,6 +92,7 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
   } = useIOMS();
 
   const [activeTab, setActiveTab] = useState<'all' | 'open' | 'in_progress' | 'qc' | 'closed'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [qcTargetTicket, setQcTargetTicket] = useState<TroubleTicket | null>(null);
   const [qcNotes, setQcNotes] = useState('');
   const [qcSaving, setQcSaving] = useState(false);
@@ -98,30 +102,45 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
   const qcCount = tickets.filter((ticket) => ticket.status === 'field_done_waiting_helpdesk_qc').length;
   const closedCount = tickets.filter((ticket) => ticket.status === 'closed').length;
 
-  const filteredTickets = tickets.filter((ticket) => {
-    if (activeTab === 'open' && ticket.status !== 'open' && ticket.status !== 'in_noc_review') return false;
-    if (activeTab === 'in_progress' && !['assigned_to_lead', 'field_progress', 'menunggu_retur_gudang'].includes(ticket.status)) return false;
-    if (activeTab === 'qc' && ticket.status !== 'field_done_waiting_helpdesk_qc') return false;
-    if (activeTab === 'closed' && ticket.status !== 'closed') return false;
+  const filteredTickets = useMemo(() => {
+    return tickets.filter((ticket) => {
+      if (activeTab === 'open' && ticket.status !== 'open' && ticket.status !== 'in_noc_review') return false;
+      if (activeTab === 'in_progress' && !['assigned_to_lead', 'field_progress', 'menunggu_retur_gudang'].includes(ticket.status)) return false;
+      if (activeTab === 'qc' && ticket.status !== 'field_done_waiting_helpdesk_qc') return false;
+      if (activeTab === 'closed' && ticket.status !== 'closed') return false;
 
-    if (selectedRegion !== 'all' && ticket.region !== selectedRegion) return false;
-    if (selectedOdpFilter !== 'all' && ticket.odpId !== selectedOdpFilter) return false;
+      if (selectedRegion !== 'all' && ticket.region !== selectedRegion) return false;
+      if (selectedOdpFilter !== 'all' && ticket.odpId !== selectedOdpFilter) return false;
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matchName = ticket.customerName.toLowerCase().includes(query);
-      const matchId = ticket.id.toLowerCase().includes(query);
-      const matchCustomerId = ticket.customerId.toLowerCase().includes(query);
-      const matchOdp = ticket.odpId.toLowerCase().includes(query);
-      const matchTitle = ticket.title.toLowerCase().includes(query);
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchName = ticket.customerName.toLowerCase().includes(query);
+        const matchId = ticket.id.toLowerCase().includes(query);
+        const matchCustomerId = ticket.customerId.toLowerCase().includes(query);
+        const matchOdp = ticket.odpId.toLowerCase().includes(query);
+        const matchTitle = ticket.title.toLowerCase().includes(query);
 
-      if (!matchName && !matchId && !matchCustomerId && !matchOdp && !matchTitle) {
-        return false;
+        if (!matchName && !matchId && !matchCustomerId && !matchOdp && !matchTitle) {
+          return false;
+        }
       }
-    }
 
-    return true;
-  });
+      return true;
+    });
+  }, [tickets, activeTab, selectedRegion, selectedOdpFilter, searchQuery]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, selectedRegion, selectedOdpFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const paginatedTickets = useMemo(() => {
+    const start = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredTickets.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredTickets, safePage]);
 
   const openQcModal = (ticket: TroubleTicket) => {
     setQcTargetTicket(ticket);
@@ -291,7 +310,7 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {filteredTickets.map((ticket) => {
+            {paginatedTickets.map((ticket) => {
               const statusMeta = getStatusMeta(ticket.status);
               const categoryMeta = getCategoryMeta(ticket.category);
               const canHelpdeskQc = ticket.status === 'field_done_waiting_helpdesk_qc';
@@ -385,6 +404,55 @@ export const HelpdeskView: React.FC<HelpdeskViewProps> = ({
                 </div>
               );
             })}
+
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/70 px-5 py-4">
+              <p className="text-xs font-semibold text-slate-500">
+                Menampilkan <span className="font-bold text-slate-900">{(safePage - 1) * ITEMS_PER_PAGE + 1}</span> - <span className="font-bold text-slate-900">{Math.min(safePage * ITEMS_PER_PAGE, filteredTickets.length)}</span> dari <span className="font-bold text-slate-900">{filteredTickets.length}</span> tiket
+              </p>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <span>Sebelumnya</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => {
+                    const isActive = pageNum === safePage;
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`min-w-[32px] h-8 rounded-xl text-xs font-bold transition shadow-2xs ${
+                          isActive
+                            ? 'bg-slate-900 text-white'
+                            : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span>Berikutnya</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </WorkspaceSectionShell>
