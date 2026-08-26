@@ -32,6 +32,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useIOMS } from '../../context/IOMSContext';
 import { WorkOrder } from '../../types';
 import { extractCoordinatesFromUrl, getGoogleMapsDirectionUrl, getGoogleMapsPinUrl } from '../../utils/coordinates';
 import { ConfirmActionModal } from '../modals/ConfirmActionModal';
@@ -115,7 +116,8 @@ const getSurveyInstallationFee = (workOrder: WorkOrder | null) => {
 
 export const PengerjaanInstalasiLapanganView: React.FC = () => {
   const { authFetch, user } = useAuth();
-  const [items, setItems] = useState<WorkOrder[]>([]);
+  const { workOrders, refreshAll, isSyncing } = useIOMS();
+  const [items, setItems] = useState<WorkOrder[]>(workOrders);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
 
@@ -148,29 +150,32 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
   const [installationPaymentCustomerPaid, setInstallationPaymentCustomerPaid] = useState(false);
   const [pppoeRequestNotes, setPppoeRequestNotes] = useState('');
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<FieldActionType | null>(null);
   const [pppoeModalOpen, setPppoeModalOpen] = useState(false);
 
+  // Synchronize items whenever workOrders updates from live sync
+  useEffect(() => {
+    if (workOrders && workOrders.length > 0) {
+      setItems(workOrders);
+      setLoading(false);
+    }
+  }, [workOrders]);
+
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await authFetch<{ data: WorkOrder[] }>('/work-orders');
-      setItems(response.data);
+      await refreshAll();
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Gagal memuat work order.');
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   const queue = useMemo(() => {
     if (!user?.id) return [];
@@ -521,9 +526,14 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
             type="button"
             onClick={() => void load()}
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition active:scale-95"
+            title="Data tersinkronisasi otomatis live. Klik untuk refresh manual."
           >
-            <RefreshCcw className="h-3.5 w-3.5" />
-            <span>Refresh</span>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>Live Sync</span>
+            <RefreshCcw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
           </button>
         </div>
 

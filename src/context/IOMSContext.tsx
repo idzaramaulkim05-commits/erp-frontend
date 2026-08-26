@@ -20,6 +20,8 @@ import {
   FinancialLedgerEntry,
   ReimbursementRequest,
 } from '../types';
+import { AppNotification } from '../components/NotificationToastContainer';
+import { playNotificationChime, requestBrowserNotificationPermission, showBrowserNotification } from '../utils/audioAlert';
 import { INITIAL_USERS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { getResolvedAllowedModules } from '../config/roleWorkspace';
@@ -163,6 +165,15 @@ interface IOMSContextType {
   updateTaskStatus: (taskId: string, newStatus: 'todo' | 'in_progress' | 'review' | 'done', resolutionNotes?: string) => void;
   resetToDefaultData: () => void;
   triggerCelebration: () => void;
+  isSyncing: boolean;
+  lastSyncedAt: Date | null;
+  notifications: AppNotification[];
+  dismissNotification: (id: string) => void;
+  clearAllNotifications: () => void;
+  isSoundEnabled: boolean;
+  toggleSoundEnabled: () => void;
+  refreshAll: () => Promise<void>;
+  requestNotificationPermission: () => Promise<boolean>;
 }
 
 const IOMSContext = createContext<IOMSContextType | undefined>(undefined);
@@ -218,6 +229,39 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [tasks, setTasks] = useState<InterDivisionTask[]>([]);
   const [networkOdps, setNetworkOdps] = useState<NetworkODP[]>([]);
   const [auditLogs, setAuditLogs] = useState<ActivityAuditLog[]>([]);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('ioms_sound_alert_enabled') !== 'false';
+  });
+
+  const isFirstLoadRef = React.useRef(true);
+  const prevWorkOrdersRef = React.useRef<WorkOrder[]>([]);
+  const prevRegistrationsRef = React.useRef<ServiceRegistration[]>([]);
+  const prevTicketsRef = React.useRef<TroubleTicket[]>([]);
+  const prevProcurementsRef = React.useRef<ProcurementRequest[]>([]);
+
+  const toggleSoundEnabled = () => {
+    setIsSoundEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem('ioms_sound_alert_enabled', String(next));
+      return next;
+    });
+  };
+
+  const dismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  const requestNotificationPermission = async () => {
+    return requestBrowserNotificationPermission();
+  };
+
   const currentUser = user ?? emptyUser;
   const activeRole = currentUser.role;
   const selectedModule = useMemo<AppModule>(() => {
@@ -255,69 +299,294 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refreshAll = async () => {
-    const canViewFinanceLedger = ['superadmin', 'finance', 'management'].includes(activeRole);
-    const [
-      usersPayload,
-      customersPayload,
-      registrationsPayload,
-      ticketsPayload,
-      workOrdersPayload,
-      inventoryPayload,
-      procurementPayload,
-      reimbursementPayload,
-      financeMutationPayload,
-      financialLedgerPayload,
-      tasksPayload,
-      odpsPayload,
-      auditPayload,
-      navigationPayload,
-    ] = await Promise.all([
-      apiRequest<unknown>('/users'),
-      apiRequest<unknown>('/customers'),
-      apiRequest<unknown>('/service-registrations'),
-      apiRequest<unknown>('/tickets'),
-      apiRequest<unknown>('/work-orders'),
-      apiRequest<unknown>('/inventory'),
-      apiRequest<unknown>('/procurements'),
-      apiRequest<unknown>('/reimbursements'),
-      canViewFinanceLedger ? apiRequest<unknown>('/finance-mutations') : Promise.resolve({ data: [] }),
-      canViewFinanceLedger ? apiRequest<unknown>('/financial-ledger') : Promise.resolve({ data: [] }),
-      apiRequest<unknown>('/tasks'),
-      apiRequest<unknown>('/network-odps'),
-      apiRequest<unknown>('/audit-logs'),
-      apiRequest<{ data: NavigationConfig }>('/auth/navigation'),
-    ]);
+    if (!user) return;
+    setIsSyncing(true);
 
-    const nextUsers = withAvatarFallback(unwrapCollection<UserProfile>(usersPayload));
-    setUsers(nextUsers.length > 0 ? nextUsers : INITIAL_USERS);
-    setCustomers(unwrapCollection<Customer>(customersPayload));
-    setServiceRegistrations(unwrapCollection<ServiceRegistration>(registrationsPayload));
-    setTickets(unwrapCollection<TroubleTicket>(ticketsPayload));
-    setWorkOrders(unwrapCollection<WorkOrder>(workOrdersPayload));
-    setInventory(unwrapCollection<InventoryItem>(inventoryPayload));
-    setProcurementRequests(unwrapCollection<ProcurementRequest>(procurementPayload));
-    setReimbursementRequests(unwrapCollection<ReimbursementRequest>(reimbursementPayload));
-    setFinanceMutations(unwrapCollection<FinanceMutation>(financeMutationPayload));
-    setFinancialLedger(unwrapCollection<FinancialLedgerEntry>(financialLedgerPayload));
-    setTasks(unwrapCollection<InterDivisionTask>(tasksPayload));
-    setNetworkOdps(unwrapCollection<NetworkODP>(odpsPayload));
-    setAuditLogs(unwrapCollection<ActivityAuditLog>(auditPayload));
-    setNavigationConfig(navigationPayload.data);
+    try {
+      const canViewFinanceLedger = ['superadmin', 'finance', 'management'].includes(activeRole);
+      const [
+        usersPayload,
+        customersPayload,
+        registrationsPayload,
+        ticketsPayload,
+        workOrdersPayload,
+        inventoryPayload,
+        procurementPayload,
+        reimbursementPayload,
+        financeMutationPayload,
+        financialLedgerPayload,
+        tasksPayload,
+        odpsPayload,
+        auditPayload,
+        navigationPayload,
+      ] = await Promise.all([
+        apiRequest<unknown>('/users'),
+        apiRequest<unknown>('/customers'),
+        apiRequest<unknown>('/service-registrations'),
+        apiRequest<unknown>('/tickets'),
+        apiRequest<unknown>('/work-orders'),
+        apiRequest<unknown>('/inventory'),
+        apiRequest<unknown>('/procurements'),
+        apiRequest<unknown>('/reimbursements'),
+        canViewFinanceLedger ? apiRequest<unknown>('/finance-mutations') : Promise.resolve({ data: [] }),
+        canViewFinanceLedger ? apiRequest<unknown>('/financial-ledger') : Promise.resolve({ data: [] }),
+        apiRequest<unknown>('/tasks'),
+        apiRequest<unknown>('/network-odps'),
+        apiRequest<unknown>('/audit-logs'),
+        apiRequest<{ data: NavigationConfig }>('/auth/navigation'),
+      ]);
+
+      const nextUsers = withAvatarFallback(unwrapCollection<UserProfile>(usersPayload));
+      const nextCustomers = unwrapCollection<Customer>(customersPayload);
+      const nextRegistrations = unwrapCollection<ServiceRegistration>(registrationsPayload);
+      const nextTickets = unwrapCollection<TroubleTicket>(ticketsPayload);
+      const nextWorkOrders = unwrapCollection<WorkOrder>(workOrdersPayload);
+      const nextInventory = unwrapCollection<InventoryItem>(inventoryPayload);
+      const nextProcurements = unwrapCollection<ProcurementRequest>(procurementPayload);
+      const nextReimbursements = unwrapCollection<ReimbursementRequest>(reimbursementPayload);
+      const nextFinanceMutations = unwrapCollection<FinanceMutation>(financeMutationPayload);
+      const nextFinancialLedger = unwrapCollection<FinancialLedgerEntry>(financialLedgerPayload);
+      const nextTasks = unwrapCollection<InterDivisionTask>(tasksPayload);
+      const nextNetworkOdps = unwrapCollection<NetworkODP>(odpsPayload);
+      const nextAuditLogs = unwrapCollection<ActivityAuditLog>(auditPayload);
+
+      setUsers(nextUsers.length > 0 ? nextUsers : INITIAL_USERS);
+      setCustomers(nextCustomers);
+      setServiceRegistrations(nextRegistrations);
+      setTickets(nextTickets);
+      setWorkOrders(nextWorkOrders);
+      setInventory(nextInventory);
+      setProcurementRequests(nextProcurements);
+      setReimbursementRequests(nextReimbursements);
+      setFinanceMutations(nextFinanceMutations);
+      setFinancialLedger(nextFinancialLedger);
+      setTasks(nextTasks);
+      setNetworkOdps(nextNetworkOdps);
+      setAuditLogs(nextAuditLogs);
+      setNavigationConfig(navigationPayload.data);
+
+      // Diffing Engine: Detect new incoming jobs/actions for active role
+      if (!isFirstLoadRef.current && currentUser?.id) {
+        const newNotifs: AppNotification[] = [];
+
+        // 1. FIELD TECH: New WO assigned to this technician or revised
+        if (activeRole === 'field_tech') {
+          const myPrevWos = prevWorkOrdersRef.current.filter((w) => w.assignedTechId === currentUser.id);
+          const myNextWos = nextWorkOrders.filter((w) => w.assignedTechId === currentUser.id || (!w.assignedTechId && w.status === 'assigned'));
+
+          myNextWos.forEach((w) => {
+            const prev = myPrevWos.find((pw) => pw.id === w.id);
+            if (!prev) {
+              newNotifs.push({
+                id: `notif-wo-${w.id}-${Date.now()}`,
+                type: 'job',
+                title: '🛠️ Tugas WO Baru Diterima',
+                message: `${w.id}: ${w.customerName} - ${w.type === 'installation' ? 'Pasang Baru' : 'Maintenance'} (${w.region})`,
+                routeTarget: '/app/pengerjaan-instalasi-lapangan',
+                targetId: w.id,
+                timestamp: new Date(),
+              });
+            } else if (prev.status !== w.status && w.status === 'dikembalikan_ke_teknisi') {
+              newNotifs.push({
+                id: `notif-wo-rev-${w.id}-${Date.now()}`,
+                type: 'alert',
+                title: '⚠️ WO Dikembalikan NOC (Revisi)',
+                message: `${w.id}: ${w.customerName} - ${w.qcNotes || 'Perlu perbaikan lapangan'}`,
+                routeTarget: '/app/pengerjaan-instalasi-lapangan',
+                targetId: w.id,
+                timestamp: new Date(),
+              });
+            }
+          });
+        }
+
+        // 2. LEAD TECH: New registrations needing survey or WOs needing assignment
+        if (activeRole === 'lead_tech' || activeRole === 'superadmin') {
+          const pendingWos = nextWorkOrders.filter((w) => w.status === 'pending_lead_assignment');
+          const prevPendingWos = prevWorkOrdersRef.current.filter((w) => w.status === 'pending_lead_assignment');
+          if (pendingWos.length > prevPendingWos.length) {
+            const newest = pendingWos[0];
+            newNotifs.push({
+              id: `notif-lead-wo-${Date.now()}`,
+              type: 'job',
+              title: '📋 WO Baru Siap Ditugaskan',
+              message: `${newest.id}: ${newest.customerName} (${newest.packagePlan}) menunggu penugasan teknisi.`,
+              routeTarget: '/app/panel-kepala-teknisi',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+
+          const pendingSurveys = nextRegistrations.filter((r) => r.status === 'menunggu_survey');
+          const prevPendingSurveys = prevRegistrationsRef.current.filter((r) => r.status === 'menunggu_survey');
+          if (pendingSurveys.length > prevPendingSurveys.length) {
+            const newest = pendingSurveys[0];
+            newNotifs.push({
+              id: `notif-lead-surv-${Date.now()}`,
+              type: 'job',
+              title: '🗺️ Registrasi Siap Disurvey',
+              message: `${newest.id}: ${newest.name} (${newest.region}) siap ditinjau survey lokasi.`,
+              routeTarget: '/app/survey-instalasi',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+        }
+
+        // 3. NOC: PPPoE request or QC verification
+        if (activeRole === 'noc' || activeRole === 'superadmin') {
+          const pppoeReqs = nextWorkOrders.filter((w) => w.pppoeRequestStatus === 'pending_noc');
+          const prevPppoeReqs = prevWorkOrdersRef.current.filter((w) => w.pppoeRequestStatus === 'pending_noc');
+          if (pppoeReqs.length > prevPppoeReqs.length) {
+            const newest = pppoeReqs[0];
+            newNotifs.push({
+              id: `notif-noc-pppoe-${Date.now()}`,
+              type: 'job',
+              title: '⚡ Request PPPoE Masuk',
+              message: `Teknisi ${newest.assignedTechName || 'Lapangan'} meminta kredensial PPPoE untuk ${newest.customerName}.`,
+              routeTarget: '/app/request-pppoe-noc',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+
+          const qcWos = nextWorkOrders.filter((w) => w.status === 'menunggu_qc_noc');
+          const prevQcWos = prevWorkOrdersRef.current.filter((w) => w.status === 'menunggu_qc_noc');
+          if (qcWos.length > prevQcWos.length) {
+            const newest = qcWos[0];
+            newNotifs.push({
+              id: `notif-noc-qc-${Date.now()}`,
+              type: 'job',
+              title: '🔍 WO Selesai - Siap QC NOC',
+              message: `${newest.id}: ${newest.customerName} telah selesai dikerjakan & menunggu verifikasi QC.`,
+              routeTarget: '/app/qc-instalasi-noc',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+        }
+
+        // 4. FINANCE: Pending installation payment or procurement approval
+        if (activeRole === 'finance' || activeRole === 'superadmin') {
+          const pendingPayments = nextWorkOrders.filter((w) => w.installationPaymentStatus === 'pending_finance' && w.installationPaymentCustomerPaid);
+          const prevPendingPayments = prevWorkOrdersRef.current.filter((w) => w.installationPaymentStatus === 'pending_finance' && w.installationPaymentCustomerPaid);
+          if (pendingPayments.length > prevPendingPayments.length) {
+            const newest = pendingPayments[0];
+            newNotifs.push({
+              id: `notif-fin-pay-${Date.now()}`,
+              type: 'job',
+              title: '💰 Konfirmasi Biaya Pasang Baru',
+              message: `${newest.id}: ${newest.customerName} - Rp ${(newest.installationFeeActual ?? 0).toLocaleString('id-ID')} (${newest.installationPaymentMethod === 'tunai' ? 'Disetor Teknisi' : 'Transfer'})`,
+              routeTarget: '/app/penagihan',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+
+          const pendingProc = nextProcurements.filter((p) => p.status === 'pending_finance');
+          const prevPendingProc = prevProcurementsRef.current.filter((p) => p.status === 'pending_finance');
+          if (pendingProc.length > prevPendingProc.length) {
+            const newest = pendingProc[0];
+            newNotifs.push({
+              id: `notif-fin-proc-${Date.now()}`,
+              type: 'job',
+              title: '📑 Pengajuan Pengadaan Gudang Masuk',
+              message: `${newest.id}: ${newest.itemName} (${newest.quantity} ${newest.unit}) - Rp ${newest.totalAmount.toLocaleString('id-ID')}`,
+              routeTarget: '/app/finance',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+        }
+
+        // 5. HELPDESK: Registrations needing validation or resolved tickets
+        if (activeRole === 'helpdesk' || activeRole === 'superadmin') {
+          const waitingVal = nextRegistrations.filter((r) => r.status === 'menunggu_validasi');
+          const prevWaitingVal = prevRegistrationsRef.current.filter((r) => r.status === 'menunggu_validasi');
+          if (waitingVal.length > prevWaitingVal.length) {
+            const newest = waitingVal[0];
+            newNotifs.push({
+              id: `notif-hd-reg-${Date.now()}`,
+              type: 'job',
+              title: '📞 Registrasi Baru Menunggu Validasi',
+              message: `${newest.id}: ${newest.name} (${newest.packagePlan}) baru didaftarkan.`,
+              routeTarget: '/app/validasi-registrasi',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+        }
+
+        // 6. INVENTORY: Return requests
+        if (activeRole === 'inventory' || activeRole === 'superadmin') {
+          const returWos = nextWorkOrders.filter((w) => w.maintenancePayload?.warehouseReturnStatus === 'menunggu_qc_gudang');
+          const prevReturWos = prevWorkOrdersRef.current.filter((w) => w.maintenancePayload?.warehouseReturnStatus === 'menunggu_qc_gudang');
+          if (returWos.length > prevReturWos.length) {
+            const newest = returWos[0];
+            newNotifs.push({
+              id: `notif-wh-retur-${Date.now()}`,
+              type: 'job',
+              title: '📦 Retur Perangkat Masuk ke Gudang',
+              message: `${newest.id}: Retur alat untuk ${newest.customerName} menunggu QC gudang.`,
+              routeTarget: '/app/retur-gudang-perangkat',
+              targetId: newest.id,
+              timestamp: new Date(),
+            });
+          }
+        }
+
+        if (newNotifs.length > 0) {
+          playNotificationChime('job');
+          setNotifications((prev) => [...newNotifs, ...prev].slice(0, 8));
+
+          const first = newNotifs[0];
+          showBrowserNotification(first.title, first.message, () => {
+            if (first.routeTarget) navigate(first.routeTarget);
+          });
+        }
+      }
+
+      prevWorkOrdersRef.current = nextWorkOrders;
+      prevRegistrationsRef.current = nextRegistrations;
+      prevTicketsRef.current = nextTickets;
+      prevProcurementsRef.current = nextProcurements;
+      isFirstLoadRef.current = false;
+      setLastSyncedAt(new Date());
+    } catch (error) {
+      console.error('Failed to sync IOMS data', error);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
+  // Smart Polling Interval: Auto-sync every 6s when active, 15s when idle
   useEffect(() => {
-    if (!user) {
-      return;
-    }
+    if (!user) return;
 
-    void (async () => {
-      try {
-        await refreshAll();
-      } catch (error) {
-        console.error('Failed to initialize IOMS frontend', error);
+    void refreshAll();
+
+    // Polling interval
+    const intervalMs = document.visibilityState === 'visible' ? 6000 : 15000;
+    const timer = setInterval(() => {
+      void refreshAll();
+    }, intervalMs);
+
+    // Instant sync when user tabs back into the browser or unlocks screen
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshAll();
       }
-    })();
-  }, [user]);
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [user, activeRole]);
 
   useEffect(() => {
     setIsMobileDeviceView(activeRole === 'field_tech');
@@ -979,6 +1248,15 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         updateTaskStatus,
         resetToDefaultData,
         triggerCelebration,
+        isSyncing,
+        lastSyncedAt,
+        notifications,
+        dismissNotification,
+        clearAllNotifications,
+        isSoundEnabled,
+        toggleSoundEnabled,
+        refreshAll,
+        requestNotificationPermission,
       }}
     >
       {children}

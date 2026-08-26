@@ -48,6 +48,7 @@ import { NewProcurementModal } from './components/modals/NewProcurementModal';
 import { TicketDetailTimelineModal } from './components/modals/TicketDetailTimelineModal';
 import { ArchitectureSpecsModal } from './components/modals/ArchitectureSpecsModal';
 import { WorkflowGuideModal } from './components/modals/WorkflowGuideModal';
+import { NotificationToastContainer } from './components/NotificationToastContainer';
 import { AppModule, TroubleTicket } from './types';
 import { LoaderCircle } from 'lucide-react';
 import { LoginPage } from './components/auth/LoginPage';
@@ -105,6 +106,10 @@ const MainIOMSApp: React.FC = () => {
     activeRole,
     currentUser,
     navigationConfig,
+    notifications,
+    dismissNotification,
+    isSoundEnabled,
+    toggleSoundEnabled,
   } = useIOMS();
   const location = useLocation();
 
@@ -274,6 +279,13 @@ const MainIOMSApp: React.FC = () => {
           </div>
         </footer>
       )}
+
+      <NotificationToastContainer
+        notifications={notifications}
+        onDismiss={dismissNotification}
+        isSoundEnabled={isSoundEnabled}
+        onToggleSound={toggleSoundEnabled}
+      />
 
       <NewTicketModal
         isOpen={isTicketModalOpen}

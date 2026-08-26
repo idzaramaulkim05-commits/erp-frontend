@@ -65,6 +65,8 @@ export const PanelTeknisiLapanganView: React.FC = () => {
     currentUser,
     workOrders,
     setSelectedModule,
+    isSyncing,
+    refreshAll,
   } = useIOMS();
 
   const myWorkOrders = useMemo(
@@ -96,14 +98,30 @@ export const PanelTeknisiLapanganView: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setSelectedModule('pengerjaan_instalasi_lapangan')}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition"
-          >
-            <Wrench className="h-3.5 w-3.5" />
-            <span>Buka Pengerjaan Lapangan</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition"
+              title="Data tersinkron otomatis live. Klik untuk refresh manual."
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Live Sync</span>
+              <RefreshCcw className={`h-3 w-3 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedModule('pengerjaan_instalasi_lapangan')}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition"
+            >
+              <Wrench className="h-3.5 w-3.5" />
+              <span>Buka Pengerjaan Lapangan</span>
+            </button>
+          </div>
         </div>
       </section>
 

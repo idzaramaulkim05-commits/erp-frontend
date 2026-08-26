@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  ArrowRight,
   BadgeInfo,
   Bell,
   CheckCircle2,
@@ -16,12 +17,16 @@ import {
   Package,
   Radio,
   Receipt,
+  RefreshCw,
   RotateCcw,
   ScrollText,
   Search,
   Shield,
+  Trash2,
   UserCog,
   Users,
+  Volume2,
+  VolumeX,
   Wifi,
   Wrench,
   X,
@@ -95,6 +100,14 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
     activeRole,
     selectedModule,
     navigationConfig,
+    isSyncing,
+    notifications,
+    dismissNotification,
+    clearAllNotifications,
+    isSoundEnabled,
+    toggleSoundEnabled,
+    refreshAll,
+    requestNotificationPermission,
   } = useIOMS();
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -105,9 +118,11 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   const navigationSections = getNavigationSections(activeRole, navigationConfig);
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isNotifMenuOpen, setIsNotifMenuOpen] = useState(false);
   const [navigationQuery, setNavigationQuery] = useState('');
   const navigationRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
+  const notifRef = useRef<HTMLDivElement | null>(null);
   const navigationSearchRef = useRef<HTMLInputElement | null>(null);
 
   const filteredSections = useMemo(() => {
@@ -137,6 +152,10 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
       if (accountRef.current && !accountRef.current.contains(target)) {
         setIsAccountMenuOpen(false);
+      }
+
+      if (notifRef.current && !notifRef.current.contains(target)) {
+        setIsNotifMenuOpen(false);
       }
     };
 
@@ -316,29 +335,121 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {/* Live Sync Status & Manual Refresh */}
           <button
             type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-amber-500 shadow-sm transition hover:border-amber-200 hover:bg-amber-50"
-            aria-label="Theme"
+            onClick={() => void refreshAll()}
+            disabled={isSyncing}
+            title="Sinkronisasi live data otomatis. Klik untuk refresh manual sekarang."
+            className="hidden sm:inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/50"
           >
-            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2.5M12 19.5V22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77" />
-            </svg>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-slate-900 font-bold">Live Sync</span>
+            <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
           </button>
 
-          <div className="hidden h-11 items-center rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm sm:flex">
-            ID
+          {/* Sound Alert Toggle */}
+          <button
+            type="button"
+            onClick={toggleSoundEnabled}
+            title={isSoundEnabled ? 'Suara Notifikasi Tugas: AKTIF (Klik untuk nonaktifkan)' : 'Suara Notifikasi: HENING (Klik untuk aktifkan)'}
+            className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition ${
+              isSoundEnabled
+                ? 'border-emerald-200 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/50'
+                : 'border-slate-200 bg-white text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            {isSoundEnabled ? <Volume2 className="h-5 w-5 text-emerald-600" /> : <VolumeX className="h-5 w-5" />}
+          </button>
+
+          {/* Notification Bell with Dropdown */}
+          <div className="relative" ref={notifRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotifMenuOpen((cur) => !cur);
+                void requestNotificationPermission();
+              }}
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700"
+              aria-label="Notifikasi"
+            >
+              <Bell className="h-5 w-5" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white ring-2 ring-white animate-pulse">
+                  {notifications.length}
+                </span>
+              )}
+            </button>
+
+            {isNotifMenuOpen && (
+              <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-80 sm:w-96 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_24px_50px_rgba(15,23,42,0.18)]">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-emerald-600" />
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Notifikasi Pekerjaan Live</h4>
+                  </div>
+                  {notifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearAllNotifications}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-rose-600 transition"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Bersihkan
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-3 max-h-80 overflow-y-auto space-y-2">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-400">
+                      <CheckCircle2 className="h-7 w-7 text-emerald-500/60 mx-auto mb-2" />
+                      Tidak ada tugas baru tertunda.
+                      <div className="text-[11px] text-slate-400 mt-1">Data tersinkronisasi otomatis setiap 6 detik.</div>
+                    </div>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        className="rounded-2xl border border-slate-100 bg-slate-50 p-3 transition hover:bg-slate-100/70"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <h5 className="text-xs font-black text-slate-900">{notif.title}</h5>
+                          <button
+                            type="button"
+                            onClick={() => dismissNotification(notif.id)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-600 leading-relaxed">{notif.message}</p>
+                        {notif.routeTarget && (
+                          <div className="mt-2.5 flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigate(notif.routeTarget!);
+                                setIsNotifMenuOpen(false);
+                                dismissNotification(notif.id);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-1.5 text-[10px] font-bold text-white transition hover:bg-slate-800"
+                            >
+                              <span>Buka Tugas</span>
+                              <ArrowRight className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-
-          <button
-            type="button"
-            className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700"
-            aria-label="Notifikasi"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />
-          </button>
 
           <div className="relative" ref={accountRef}>
             <button
