@@ -473,10 +473,15 @@ export interface WorkOrder {
   type: WorkOrderType;
   customerId?: string | null;
   customerName: string;
+  customerNik?: string | null;
+  customerGender?: string | null;
   customerPhone: string;
   address: string;
   region: string;
   odpId?: string | null;
+  odpPort?: number | null;
+  monthlyFee?: number | null;
+  entrySource?: string | null;
   shareLocationUrl?: string | null;
   housePhoto?: string | null;
   assignedLead: string;

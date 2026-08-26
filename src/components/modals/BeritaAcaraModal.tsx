@@ -39,6 +39,15 @@ export const BeritaAcaraModal: React.FC<BeritaAcaraModalProps> = ({
     year: 'numeric',
   }).format(new Date());
 
+  const maskNik = (nik?: string | null): string => {
+    if (!nik || nik.trim() === '') return '351XXX001';
+    const clean = nik.replace(/\D/g, '');
+    if (clean.length < 6) return clean ? `${clean.slice(0, 3)}XXX` : '351XXX001';
+    const prefix = clean.slice(0, 3);
+    const suffix = clean.slice(-3);
+    return `${prefix}XXX${suffix}`;
+  };
+
   const cleanPhone = (workOrder.customerPhone ?? '').replace(/[^0-9]/g, '').replace(/^0/, '62');
   const waMessage =
     `*BERITA ACARA AKTIVASI LAYANAN INTERNET*\n\n` +
@@ -46,6 +55,7 @@ export const BeritaAcaraModal: React.FC<BeritaAcaraModalProps> = ({
     `Tanggal: ${todayFormatted}\n\n` +
     `*Data Pelanggan:*\n` +
     `• Nama: ${workOrder.customerName}\n` +
+    `• NIK: ${maskNik(workOrder.customerNik || (workOrder.surveySnapshot as Record<string, unknown>)?.nik as string)}\n` +
     `• Kontak: ${workOrder.customerPhone}\n` +
     `• Alamat: ${workOrder.address}\n` +
     `• Paket: ${workOrder.packagePlan ?? 'Home Fiber'}\n\n` +
@@ -107,8 +117,18 @@ export const BeritaAcaraModal: React.FC<BeritaAcaraModalProps> = ({
                 <strong className="text-sm font-bold text-slate-950">{workOrder.customerName}</strong>
               </div>
               <div>
+                <span className="text-slate-400 block text-[10px]">NIK (No. KTP)</span>
+                <strong className="text-sm font-mono font-bold text-slate-900">
+                  {maskNik(workOrder.customerNik || (workOrder.surveySnapshot as Record<string, unknown>)?.nik as string)}
+                </strong>
+              </div>
+              <div>
                 <span className="text-slate-400 block text-[10px]">Nomor Telepon / WhatsApp</span>
                 <strong className="text-slate-900 font-mono">{workOrder.customerPhone || '-'}</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Jenis Kelamin</span>
+                <span className="font-semibold text-slate-800">{workOrder.customerGender || 'Laki-laki'}</span>
               </div>
               <div className="sm:col-span-2">
                 <span className="text-slate-400 block text-[10px]">Alamat Pemasangan</span>

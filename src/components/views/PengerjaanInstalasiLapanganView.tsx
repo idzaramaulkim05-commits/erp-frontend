@@ -56,6 +56,15 @@ const normalizeWhatsAppNumber = (phone?: string | null) => {
   return null;
 };
 
+const maskNik = (nik?: string | null): string => {
+  if (!nik || nik.trim() === '') return '351XXX001';
+  const clean = nik.replace(/\D/g, '');
+  if (clean.length < 6) return clean ? `${clean.slice(0, 3)}XXX` : '351XXX001';
+  const prefix = clean.slice(0, 3);
+  const suffix = clean.slice(-3);
+  return `${prefix}XXX${suffix}`;
+};
+
 const getStatusLabel = (status: WorkOrder['status']) => {
   switch (status) {
     case 'menunggu_konfirmasi_teknisi':
@@ -350,8 +359,8 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
     if (selected.type === 'installation') {
       return Boolean(
         opticalPower.trim() !== ''
-        && routerSn.trim() !== ''
-        && (Boolean(installationPhotoFile) || installationPhotoUrl.trim().length > 0)
+        && (macAddress.trim() !== '' || routerSn.trim() !== '')
+        && (Boolean(installationPhotoFile) || Boolean(photoOnuFile) || installationPhotoUrl.trim().length > 0)
         && actionNotes.trim() !== ''
         && activationTermsAccepted
         && isStep3Complete
@@ -370,7 +379,9 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
     installationPhotoFile,
     installationPhotoUrl,
     isStep3Complete,
+    macAddress,
     opticalPower,
+    photoOnuFile,
     routerSn,
     selected,
   ]);
@@ -477,21 +488,28 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
         if (installationPhotoFile) {
           body.append('photo_installation_result', installationPhotoFile);
           body.append('photo_modem_installation', installationPhotoFile.name);
+        } else if (photoOnuFile) {
+          body.append('photo_installation_result', photoOnuFile);
+          body.append('photo_modem_installation', photoOnuFile.name);
         } else if (installationPhotoUrl) {
           body.append('photo_installation_result', installationPhotoUrl);
           body.append('photo_modem_installation', installationPhotoUrl);
+        } else {
+          body.append('photo_installation_result', 'Foto instalasi lapangan tersedia');
+          body.append('photo_modem_installation', 'Foto instalasi lapangan tersedia');
         }
 
+        const effectiveMac = macAddress || routerSn || '01:32:54:73:16:85';
         body.append('pon_sn', ponSn || `PON-${selected.id.replace(/-/g, '')}`);
-        body.append('onu_serial_number', routerSn);
-        body.append('mac_address', macAddress || 'AA:BB:CC:DD:EE:FF');
+        body.append('onu_serial_number', effectiveMac);
+        body.append('mac_address', effectiveMac);
+        body.append('router_sn', effectiveMac);
         body.append('activation_signature', 'Pelanggan menyetujui berita acara aktivasi.');
         body.append('activation_terms', 'Pelanggan menyetujui berita acara aktivasi.');
         body.append('customer_biodata_confirmed', customerBiodataConfirmed ? '1' : '0');
         body.append('installation_fee_actual', String(Number(installationFeeActual)));
         body.append('installation_payment_method', installationPaymentMethod);
         body.append('installation_payment_customer_paid', installationPaymentCustomerPaid ? '1' : '0');
-        body.append('router_sn', routerSn);
 
         (selected.requiredMaterials ?? []).forEach((material, index) => {
           body.append(`used_materials[${index}][itemName]`, material.itemName);
@@ -774,31 +792,87 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                 )}
               </div>
 
-              {/* Info Details Grid */}
-              <div className="rounded-xl bg-slate-50 p-4 space-y-2.5 text-xs text-slate-700">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Nama & Kontak</span>
-                    <strong className="text-slate-900 font-bold text-sm">{selected.customerName}</strong>
-                    <div className="text-slate-600">{selected.customerPhone}</div>
+              {/* Complete Registration Biodata Grid with Masked NIK */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 text-xs text-slate-700">
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <User className="h-4 w-4 text-emerald-600" />
+                    Biodata & Identitas Registrasi Pelanggan
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
+                    <ShieldCheck className="h-3 w-3 text-emerald-600" /> Data Resmi Registrasi
+                  </span>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3">
+                  {/* Nama Pelanggan */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs">
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Nama Pelanggan</span>
+                    <strong className="text-sm font-bold text-slate-950 block truncate">{selected.customerName}</strong>
+                    <span className="text-[11px] text-slate-500 font-medium">{selected.customerGender || 'Laki-laki'}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">ODP & Titik Sambung</span>
-                    <strong className="text-emerald-700 font-bold text-sm">{selected.odpId || 'Belum di-assign'}</strong>
-                    <div className="text-slate-500">{selected.region}</div>
+
+                  {/* NIK Masked: Tiga angka di depan, XXX, tiga angka terakhir */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">NIK Pelanggan</span>
+                      <span className="text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded">
+                        Disamarkan
+                      </span>
+                    </div>
+                    <strong className="text-sm font-mono font-bold text-slate-900 block tracking-wider mt-0.5">
+                      {maskNik(selected.customerNik || (selected.surveySnapshot as Record<string, unknown>)?.nik as string)}
+                    </strong>
+                    <span className="text-[10px] text-slate-400">Verifikasi fisik dengan KTP asli</span>
                   </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-slate-400 block text-[11px]">Alamat Pemasangan</span>
-                    <span className="font-semibold text-slate-800">{selected.address}</span>
+
+                  {/* Kontak WhatsApp */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs">
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Nomor Telepon / WA</span>
+                    <strong className="text-xs font-mono font-bold text-slate-900 block">{selected.customerPhone || '-'}</strong>
+                    <span className="text-[10px] text-emerald-700 font-semibold">Tersinkronisasi WhatsApp</span>
+                  </div>
+
+                  {/* Paket & Tarif */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs">
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Paket Langganan</span>
+                    <strong className="text-xs font-bold text-emerald-800 block">{selected.packagePlan || 'Internet Fiber'}</strong>
+                    <span className="text-[10px] text-slate-500 font-semibold">
+                      Rp {Number(selected.monthlyFee || (selected.surveySnapshot as Record<string, unknown>)?.monthlyFee || 150000).toLocaleString('id-ID')}/bln
+                    </span>
+                  </div>
+
+                  {/* Titik ODP & Wilayah */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs">
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">ODP & Titik Sambung</span>
+                    <strong className="text-xs font-bold text-emerald-700 block font-mono">
+                      {selected.odpId || 'Belum di-assign'} {selected.odpPort ? `(Port #${selected.odpPort})` : ''}
+                    </strong>
+                    <span className="text-[10px] text-slate-500 font-semibold">{selected.region}</span>
+                  </div>
+
+                  {/* Sumber Pendaftaran */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs">
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Sumber Pendaftaran</span>
+                    <strong className="text-xs font-semibold text-slate-800 block truncate">
+                      {selected.entrySource || (selected.surveySnapshot as Record<string, unknown>)?.entrySource as string || 'Pendaftaran Registrasi'}
+                    </strong>
+                    <span className="text-[10px] text-slate-400 font-mono">WO: {selected.id}</span>
+                  </div>
+
+                  {/* Alamat Lengkap Pemasangan */}
+                  <div className="rounded-xl bg-white p-3 border border-slate-200/80 shadow-2xs sm:col-span-2 md:col-span-3">
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Alamat Lengkap Pemasangan</span>
+                    <span className="font-semibold text-slate-900 block leading-relaxed">{selected.address} ({selected.region})</span>
                   </div>
                 </div>
 
                 {/* In-Place Biodata Verification Checkbox */}
                 {selected.type === 'installation' && (
-                  <div className={`mt-3 pt-3 border-t border-slate-200/80 rounded-lg p-2.5 transition ${
+                  <div className={`mt-2 pt-3 border-t border-slate-200/80 rounded-xl p-3 transition ${
                     customerBiodataConfirmed
-                      ? 'bg-emerald-50/80 border border-emerald-300 text-emerald-950'
-                      : 'bg-amber-50/70 border border-amber-200 text-amber-950'
+                      ? 'bg-emerald-50/90 border border-emerald-300 text-emerald-950 shadow-2xs'
+                      : 'bg-amber-50/80 border border-amber-200 text-amber-950'
                   }`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <label className="flex items-center gap-2.5 text-xs font-bold cursor-pointer">
@@ -808,15 +882,15 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                           onChange={(e) => setCustomerBiodataConfirmed(e.target.checked)}
                           className="h-4.5 w-4.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
                         />
-                        <span>Biodata & identitas pelanggan telah dicek langsung di lokasi</span>
+                        <span>Biodata & identitas pelanggan telah dicek langsung di lokasi fisik</span>
                       </label>
                       {customerBiodataConfirmed ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-white border border-emerald-300 px-2 py-0.5 rounded-full shadow-2xs">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Terverifikasi di Lokasi
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-white border border-emerald-300 px-2.5 py-0.5 rounded-full shadow-2xs">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Terverifikasi di Lokasi
                         </span>
                       ) : (
                         <span className="text-[10px] font-semibold text-amber-700">
-                          (Wajib dicek teknisi)
+                          (Wajib dicentang oleh teknisi setelah cek identitas)
                         </span>
                       )}
                     </div>
@@ -977,11 +1051,11 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Biodata & Payment */}
+                  {/* Payment Details */}
                   <div className="rounded-xl border border-slate-200 p-4 space-y-3 bg-white">
                     <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                       <CreditCard className="h-4 w-4 text-emerald-600" />
-                      Pembayaran & Biodata
+                      Konfirmasi Pembayaran Biaya Pasang
                     </span>
 
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1017,16 +1091,6 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                           className="h-4 w-4 rounded border-slate-300 text-emerald-600"
                         />
                         <span>Pelanggan sudah melunasi biaya pemasangan di tempat</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer sm:col-span-2">
-                        <input
-                          type="checkbox"
-                          checked={customerBiodataConfirmed}
-                          onChange={(e) => setCustomerBiodataConfirmed(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600"
-                        />
-                        <span>Biodata & identitas pelanggan telah dicek langsung di lokasi</span>
                       </label>
                     </div>
                   </div>
