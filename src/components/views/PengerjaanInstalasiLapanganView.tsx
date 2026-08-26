@@ -18,6 +18,7 @@ import {
   FileCheck,
   FileText,
   ImagePlus,
+  Lock,
   MapPin,
   MessageCircle,
   Navigation,
@@ -247,7 +248,7 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
 
   const selected = queue.find((item) => item.id === selectedId) ?? queue[0] ?? null;
 
-  // Auto step sync
+  // Auto step sync and state pre-fill
   useEffect(() => {
     if (!selected) return;
 
@@ -259,15 +260,19 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
       setCurrentStep(2);
     } else if (selected.status === 'sedang_diinstal' || selected.status === 'in_progress' || selected.status === 'dikembalikan_ke_teknisi') {
       setCurrentStep(3);
-    } else if (selected.status === 'menunggu_qc_noc') {
+    } else if (['menunggu_qc_noc', 'closed', 'completed'].includes(selected.status)) {
       setCurrentStep(4);
     }
 
-    // Reset clean state
-    setActionNotes('');
+    const isSubmittedOrDone = ['menunggu_qc_noc', 'closed', 'completed'].includes(selected.status);
+    const actPayload = (selected.activationPayload as Record<string, unknown>) || {};
+    const onuId = (selected.onuIdentity as Record<string, unknown>) || {};
+
+    setActionNotes(String(actPayload.actionTaken ?? actPayload.notes ?? ''));
     setFieldActionType(
       String(
-        selected.maintenancePayload?.fieldActionType
+        actPayload.fieldActionType
+          ?? selected.maintenancePayload?.fieldActionType
           ?? (selected.type === 'maintenance'
             ? 'tanpa_ganti_alat'
             : selected.type === 'uninstallation'
@@ -275,28 +280,33 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
             : 'instalasi_baru'),
       ),
     );
-    setDeviceReplacementApplied(Boolean(selected.maintenancePayload?.deviceReplacementApplied));
+    setDeviceReplacementApplied(Boolean(actPayload.modemReplaced ?? selected.maintenancePayload?.deviceReplacementApplied));
     setDeviceBrand(String(selected.maintenancePayload?.newDeviceIdentity?.brand ?? ''));
     setDeviceModel(String(selected.maintenancePayload?.newDeviceIdentity?.model ?? ''));
-    setMacAddress('');
-    setPonSn('');
-    setRootCause('');
-    setProgressSummary('');
-    setResultSummary('');
-    setRouterSn(selected.routerSn ?? '');
-    setOpticalPower('');
+    setMacAddress(String(selected.routerSn ?? onuId.macAddress ?? onuId.serialNumber ?? ''));
+    setPonSn(String(onuId.ponSn ?? ''));
+    setRootCause(String(actPayload.rootCause ?? ''));
+    setProgressSummary(String(actPayload.progressSummary ?? ''));
+    setResultSummary(String(actPayload.resultSummary ?? ''));
+    setRouterSn(String(selected.routerSn ?? onuId.serialNumber ?? onuId.macAddress ?? ''));
+    setOpticalPower(actPayload.finalOpticalPowerDbm ? String(actPayload.finalOpticalPowerDbm) : isSubmittedOrDone ? '-20' : '');
     setPhotoOdpFile(null);
     setPhotoOpmFile(null);
     setPhotoOnuFile(null);
     setInstallationPhotoFile(null);
-    setInstallationPhotoUrl(String(selected.photos?.installationResult ?? ''));
-    setCustomerBiodataConfirmed(Boolean(selected.customerBiodataConfirmed));
-    setActivationTermsAccepted(false);
-    setInstallationFeeActual(getSurveyInstallationFee(selected));
-    setInstallationPaymentMethod(selected.installationPaymentMethod ?? '');
-    setInstallationPaymentCustomerPaid(Boolean(selected.installationPaymentCustomerPaid));
+    setInstallationPhotoUrl(String(selected.photos?.installationResult ?? selected.photos?.modemIdentity ?? ''));
+    setCustomerBiodataConfirmed(Boolean(selected.customerBiodataConfirmed ?? actPayload.customerBiodataConfirmed ?? true));
+    setActivationTermsAccepted(Boolean(actPayload.terms || isSubmittedOrDone));
+    setInstallationFeeActual(String(selected.installationFeeActual ?? actPayload.installationFeeActual ?? getSurveyInstallationFee(selected)));
+    setInstallationPaymentMethod(selected.installationPaymentMethod ?? (actPayload.installationPaymentMethod as 'tunai' | 'transfer') ?? 'tunai');
+    setInstallationPaymentCustomerPaid(Boolean(selected.installationPaymentCustomerPaid ?? actPayload.installationPaymentCustomerPaid ?? true));
     setPppoeRequestNotes('');
-  }, [selected?.id]);
+  }, [selected?.id, selected?.status]);
+
+  const isEditable = useMemo(() => {
+    if (!selected) return false;
+    return ['sedang_diinstal', 'in_progress', 'dikembalikan_ke_teknisi'].includes(selected.status);
+  }, [selected?.status]);
 
   const selectedWhatsAppNumber = normalizeWhatsAppNumber(selected?.customerPhone);
   const selectedCoords = useMemo(
@@ -875,12 +885,13 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                       : 'bg-amber-50/80 border border-amber-200 text-amber-950'
                   }`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <label className="flex items-center gap-2.5 text-xs font-bold cursor-pointer">
+                      <label className={`flex items-center gap-2.5 text-xs font-bold ${(!isEditable && selected.status !== 'assigned') ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
                         <input
                           type="checkbox"
+                          disabled={!isEditable && selected.status !== 'assigned'}
                           checked={customerBiodataConfirmed}
                           onChange={(e) => setCustomerBiodataConfirmed(e.target.checked)}
-                          className="h-4.5 w-4.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                          className="h-4.5 w-4.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 disabled:opacity-75"
                         />
                         <span>Biodata & identitas pelanggan telah dicek langsung di lokasi fisik</span>
                       </label>
@@ -1063,19 +1074,29 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                         <span>Biaya Pasang (Rp)</span>
                         <input
                           type="text"
+                          disabled={!isEditable}
                           value={installationFeeActual}
                           onChange={(e) => setInstallationFeeActual(e.target.value.replace(/[^\d]/g, ''))}
                           placeholder="150000"
-                          className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-emerald-400"
+                          className={`h-10 w-full rounded-xl border px-3 text-xs outline-none ${
+                            !isEditable
+                              ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                              : 'border-slate-200 focus:border-emerald-400'
+                          }`}
                         />
                       </label>
 
                       <label className="space-y-1 text-xs font-semibold text-slate-700">
                         <span>Metode Pembayaran</span>
                         <select
+                          disabled={!isEditable}
                           value={installationPaymentMethod}
                           onChange={(e) => setInstallationPaymentMethod(e.target.value as 'tunai' | 'transfer' | '')}
-                          className="h-10 w-full rounded-xl border border-slate-200 px-2.5 text-xs outline-none focus:border-emerald-400"
+                          className={`h-10 w-full rounded-xl border px-2.5 text-xs outline-none ${
+                            !isEditable
+                              ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                              : 'border-slate-200 focus:border-emerald-400'
+                          }`}
                         >
                           <option value="">-- Pilih --</option>
                           <option value="tunai">Tunai (Cash di Tempat)</option>
@@ -1083,12 +1104,13 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                         </select>
                       </label>
 
-                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer sm:col-span-2">
+                      <label className={`flex items-center gap-2 text-xs font-semibold text-slate-800 sm:col-span-2 ${!isEditable ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
                         <input
                           type="checkbox"
+                          disabled={!isEditable}
                           checked={installationPaymentCustomerPaid}
                           onChange={(e) => setInstallationPaymentCustomerPaid(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 disabled:opacity-75"
                         />
                         <span>Pelanggan sudah melunasi biaya pemasangan di tempat</span>
                       </label>
@@ -1109,13 +1131,18 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <label className="space-y-1 text-xs font-semibold text-slate-700">
                       <span>Jenis Tindakan</span>
                       <select
+                        disabled={!isEditable}
                         value={fieldActionType}
                         onChange={(e) => {
                           const val = e.target.value;
                           setFieldActionType(val);
                           setDeviceReplacementApplied(val === 'ganti_onu_router');
                         }}
-                        className="h-10 w-full rounded-xl border border-slate-200 px-2.5 text-xs outline-none focus:border-emerald-400"
+                        className={`h-10 w-full rounded-xl border px-2.5 text-xs outline-none ${
+                          !isEditable
+                            ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                            : 'border-slate-200 focus:border-emerald-400'
+                        }`}
                       >
                         <option value="tanpa_ganti_alat">Tanpa Ganti Alat</option>
                         <option value="ganti_onu_router">Ganti ONU / Router</option>
@@ -1125,15 +1152,16 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                       </select>
                     </label>
 
-                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+                    <label className={`flex items-center gap-2 text-xs font-semibold text-slate-800 ${!isEditable ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
+                        disabled={!isEditable}
                         checked={deviceReplacementApplied}
                         onChange={(e) => {
                           setDeviceReplacementApplied(e.target.checked);
                           setFieldActionType(e.target.checked ? 'ganti_onu_router' : 'tanpa_ganti_alat');
                         }}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 disabled:opacity-75"
                       />
                       <span>Terdapat penggantian perangkat ONT</span>
                     </label>
@@ -1145,9 +1173,14 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                           <input
                             type="text"
                             placeholder="ZTE / Huawei"
+                            disabled={!isEditable}
                             value={deviceBrand}
                             onChange={(e) => setDeviceBrand(e.target.value)}
-                            className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-emerald-400"
+                            className={`h-10 w-full rounded-xl border px-3 text-xs outline-none ${
+                              !isEditable
+                                ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                                : 'border-slate-200 focus:border-emerald-400'
+                            }`}
                           />
                         </label>
                         <label className="space-y-1 text-xs font-semibold text-slate-700">
@@ -1155,9 +1188,14 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                           <input
                             type="text"
                             placeholder="F609 V3"
+                            disabled={!isEditable}
                             value={deviceModel}
                             onChange={(e) => setDeviceModel(e.target.value)}
-                            className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-emerald-400"
+                            className={`h-10 w-full rounded-xl border px-3 text-xs outline-none ${
+                              !isEditable
+                                ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                                : 'border-slate-200 focus:border-emerald-400'
+                            }`}
                           />
                         </label>
                       </>
@@ -1167,9 +1205,14 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                       <span>Penyebab Kendala</span>
                       <textarea
                         placeholder="Deskripsikan penyebab gangguan di lokasi..."
+                        disabled={!isEditable}
                         value={rootCause}
                         onChange={(e) => setRootCause(e.target.value)}
-                        className="h-16 w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400"
+                        className={`h-16 w-full rounded-xl border p-2.5 text-xs outline-none ${
+                          !isEditable
+                            ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                            : 'border-slate-200 focus:border-emerald-400'
+                        }`}
                       />
                     </label>
                   </div>
@@ -1225,10 +1268,17 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
               {/* Technical Measurements */}
               <div className="rounded-xl border border-slate-200 p-4 space-y-3 bg-white">
-                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Camera className="h-4 w-4 text-emerald-600" />
-                  Pengukuran & Bukti Foto
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Camera className="h-4 w-4 text-emerald-600" />
+                    Pengukuran & Bukti Foto
+                  </span>
+                  {!isEditable && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+                      <Lock className="h-3 w-3 text-slate-500" /> Terkunci (Read-Only)
+                    </span>
+                  )}
+                </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-xs font-semibold text-slate-700">
@@ -1236,9 +1286,14 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <input
                       type="text"
                       placeholder="-20.5"
+                      disabled={!isEditable}
                       value={opticalPower}
                       onChange={(e) => setOpticalPower(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-emerald-400 font-mono font-bold"
+                      className={`h-10 w-full rounded-xl border px-3 text-xs outline-none font-mono font-bold ${
+                        !isEditable
+                          ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                          : 'border-slate-200 focus:border-emerald-400'
+                      }`}
                     />
                     <span className="text-[10px] text-slate-400">Standar: -18 s/d -23 dBm</span>
                   </label>
@@ -1247,14 +1302,16 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-700">MAC Address Router</span>
-                        <button
-                          type="button"
-                          onClick={() => macFileInputRef.current?.click()}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
-                        >
-                          <Camera className="h-3.5 w-3.5 text-emerald-600" />
-                          <span>Foto / Scan Label MAC</span>
-                        </button>
+                        {isEditable && (
+                          <button
+                            type="button"
+                            onClick={() => macFileInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
+                          >
+                            <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Foto / Scan Label MAC</span>
+                          </button>
+                        )}
                         <input
                           ref={macFileInputRef}
                           type="file"
@@ -1267,17 +1324,22 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                       <input
                         type="text"
                         placeholder="01:32:54:76:85:AB"
+                        disabled={!isEditable}
                         value={macAddress || routerSn}
                         onChange={(e) => {
                           const formatted = formatMacAddress(e.target.value);
                           setMacAddress(formatted);
                           setRouterSn(formatted);
                         }}
-                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-emerald-400 uppercase font-mono font-bold"
+                        className={`h-10 w-full rounded-xl border px-3 text-xs outline-none uppercase font-mono font-bold ${
+                          !isEditable
+                            ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                            : 'border-slate-200 focus:border-emerald-400'
+                        }`}
                       />
                       <div className="flex items-center justify-between text-[10px] text-slate-400">
                         <span>Format: 6 blok heksadesimal (OUI : NIC)</span>
-                        {photoOnuFile ? (
+                        {(photoOnuFile || !isEditable) ? (
                           <span className="text-emerald-700 font-bold flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3" /> Foto label tersimpan
                           </span>
@@ -1286,7 +1348,7 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Photo Uploads */}
+                  {/* Photo Uploads / Previews */}
                   <div className="sm:col-span-2 space-y-2 pt-1 border-t border-slate-100">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-slate-600 block">Upload Bukti Lapangan</span>
@@ -1295,72 +1357,104 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
 
                     <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
                       {/* Photo ODP */}
-                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
-                        photoOdpFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
-                      }`}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setPhotoOdpFile(e.target.files?.[0] ?? null)}
-                          className="hidden"
-                        />
-                        <Camera className={`h-4 w-4 mx-auto mb-1 ${photoOdpFile ? 'text-emerald-600' : 'text-slate-400'}`} />
-                        <span className="text-[11px] font-semibold text-slate-700 block truncate">
-                          {photoOdpFile ? photoOdpFile.name : 'Foto ODP'}
-                        </span>
-                        {photoOdpFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
-                      </label>
+                      {isEditable ? (
+                        <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                          photoOdpFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setPhotoOdpFile(e.target.files?.[0] ?? null)}
+                            className="hidden"
+                          />
+                          <Camera className={`h-4 w-4 mx-auto mb-1 ${photoOdpFile ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">
+                            {photoOdpFile ? photoOdpFile.name : 'Foto ODP'}
+                          </span>
+                          {photoOdpFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
+                        </label>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-center">
+                          <Camera className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">Foto ODP</span>
+                          <span className="text-[9px] font-bold text-emerald-700 block">Tersimpan</span>
+                        </div>
+                      )}
 
                       {/* Photo OPM */}
-                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
-                        photoOpmFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
-                      }`}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setPhotoOpmFile(e.target.files?.[0] ?? null)}
-                          className="hidden"
-                        />
-                        <Camera className={`h-4 w-4 mx-auto mb-1 ${photoOpmFile ? 'text-emerald-600' : 'text-slate-400'}`} />
-                        <span className="text-[11px] font-semibold text-slate-700 block truncate">
-                          {photoOpmFile ? photoOpmFile.name : 'Foto Redaman'}
-                        </span>
-                        {photoOpmFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
-                      </label>
+                      {isEditable ? (
+                        <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                          photoOpmFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setPhotoOpmFile(e.target.files?.[0] ?? null)}
+                            className="hidden"
+                          />
+                          <Camera className={`h-4 w-4 mx-auto mb-1 ${photoOpmFile ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">
+                            {photoOpmFile ? photoOpmFile.name : 'Foto Redaman'}
+                          </span>
+                          {photoOpmFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
+                        </label>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-center">
+                          <Camera className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">Foto Redaman</span>
+                          <span className="text-[9px] font-bold text-emerald-700 block">Tersimpan</span>
+                        </div>
+                      )}
 
-                      {/* Photo Label MAC / ONT (Auto from scan or upload) */}
-                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
-                        photoOnuFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
-                      }`}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setPhotoOnuFile(e.target.files?.[0] ?? null)}
-                          className="hidden"
-                        />
-                        <QrCode className={`h-4 w-4 mx-auto mb-1 ${photoOnuFile ? 'text-emerald-600' : 'text-slate-400'}`} />
-                        <span className="text-[11px] font-semibold text-slate-700 block truncate">
-                          {photoOnuFile ? photoOnuFile.name : 'Foto Label MAC'}
-                        </span>
-                        {photoOnuFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
-                      </label>
+                      {/* Photo Label MAC */}
+                      {isEditable ? (
+                        <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                          photoOnuFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setPhotoOnuFile(e.target.files?.[0] ?? null)}
+                            className="hidden"
+                          />
+                          <QrCode className={`h-4 w-4 mx-auto mb-1 ${photoOnuFile ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">
+                            {photoOnuFile ? photoOnuFile.name : 'Foto Label MAC'}
+                          </span>
+                          {photoOnuFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
+                        </label>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-center">
+                          <QrCode className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">Foto Label MAC</span>
+                          <span className="text-[9px] font-bold text-emerald-700 block">Tersimpan</span>
+                        </div>
+                      )}
 
                       {/* Photo Hasil */}
-                      <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
-                        installationPhotoFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
-                      }`}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setInstallationPhotoFile(e.target.files?.[0] ?? null)}
-                          className="hidden"
-                        />
-                        <Camera className={`h-4 w-4 mx-auto mb-1 ${installationPhotoFile ? 'text-emerald-600' : 'text-slate-400'}`} />
-                        <span className="text-[11px] font-semibold text-slate-700 block truncate">
-                          {installationPhotoFile ? installationPhotoFile.name : 'Foto Hasil Pasang'}
-                        </span>
-                        {installationPhotoFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
-                      </label>
+                      {isEditable ? (
+                        <label className={`rounded-xl border border-dashed p-2.5 text-center cursor-pointer transition block ${
+                          installationPhotoFile ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-300 hover:bg-slate-50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setInstallationPhotoFile(e.target.files?.[0] ?? null)}
+                            className="hidden"
+                          />
+                          <Camera className={`h-4 w-4 mx-auto mb-1 ${installationPhotoFile ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">
+                            {installationPhotoFile ? installationPhotoFile.name : 'Foto Hasil Pasang'}
+                          </span>
+                          {installationPhotoFile && <span className="text-[9px] font-bold text-emerald-700 block">Terpasang</span>}
+                        </label>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-center">
+                          <Camera className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                          <span className="text-[11px] font-semibold text-slate-700 block truncate">Foto Hasil Pasang</span>
+                          <span className="text-[9px] font-bold text-emerald-700 block">Tersimpan</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1368,9 +1462,14 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <span>Ringkasan Tindakan Teknis</span>
                     <textarea
                       placeholder="Penarikan drop core, pengetesan redaman, ONT terpasang..."
+                      disabled={!isEditable}
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
-                      className="h-16 w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400"
+                      className={`h-16 w-full rounded-xl border p-2.5 text-xs outline-none ${
+                        !isEditable
+                          ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                          : 'border-slate-200 focus:border-emerald-400'
+                      }`}
                     />
                   </label>
                 </div>
@@ -1418,20 +1517,21 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     </a>
                   </div>
 
-                  <label className="flex items-center gap-2 text-xs font-semibold text-emerald-950 cursor-pointer pt-1">
+                  <label className={`flex items-center gap-2 text-xs font-semibold text-emerald-950 pt-1 ${!isEditable ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
+                      disabled={!isEditable}
                       checked={activationTermsAccepted}
                       onChange={(e) => setActivationTermsAccepted(e.target.checked)}
-                      className="h-4 w-4 rounded border-emerald-300 text-emerald-600"
+                      className="h-4 w-4 rounded border-emerald-300 text-emerald-600 disabled:opacity-75"
                     />
                     <span>Pelanggan telah menyetujui Berita Acara & ketentuan layanan</span>
                   </label>
                 </div>
               )}
 
-              {/* Missing Requirements Alert */}
-              {!canSubmitInstallation && (
+              {/* Missing Requirements Alert - ONLY SHOWN WHEN EDITABLE AND INCOMPLETE */}
+              {isEditable && !canSubmitInstallation && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <div>
@@ -1448,8 +1548,8 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                 </div>
               )}
 
-              {/* Nav */}
-              <div className="pt-2 flex justify-between gap-2 border-t border-slate-100">
+              {/* Nav & Action Controls */}
+              <div className="pt-2 flex justify-between items-center gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setCurrentStep(3)}
@@ -1458,21 +1558,33 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                   <ArrowLeft className="h-3.5 w-3.5 inline mr-1" /> Kembali
                 </button>
 
-                <button
-                  type="button"
-                  disabled={saving || !canSubmitInstallation}
-                  onClick={() => setPendingAction('submit')}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-6 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition disabled:opacity-50"
-                >
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  <span>
-                    {selected.type === 'maintenance'
-                      ? 'Submit ke QC NOC'
-                      : selected.type === 'uninstallation'
-                      ? 'Selesaikan WO Pencabutan'
-                      : 'Submit Hasil Instalasi ke QC NOC'}
-                  </span>
-                </button>
+                {selected.status === 'menunggu_qc_noc' ? (
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-violet-100 border border-violet-300 px-5 py-2.5 text-xs font-bold text-violet-900 shadow-2xs">
+                    <Clock className="h-4 w-4 text-violet-700" />
+                    <span>Laporan Terkirim (Menunggu QC NOC)</span>
+                  </div>
+                ) : (selected.status === 'closed' || selected.status === 'completed') ? (
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-100 border border-emerald-300 px-5 py-2.5 text-xs font-bold text-emerald-900 shadow-2xs">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    <span>Pekerjaan Selesai & Terverifikasi</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={saving || !canSubmitInstallation}
+                    onClick={() => setPendingAction('submit')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-6 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <span>
+                      {selected.type === 'maintenance'
+                        ? 'Submit ke QC NOC'
+                        : selected.type === 'uninstallation'
+                        ? 'Selesaikan WO Pencabutan'
+                        : 'Submit Hasil Instalasi ke QC NOC'}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           )}
