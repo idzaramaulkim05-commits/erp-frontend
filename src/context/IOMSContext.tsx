@@ -68,7 +68,7 @@ interface IOMSContextType {
   createInstallationWorkOrderFromRegistration: (registrationId: string) => void;
   createCustomer: (customerData: Partial<Customer>, initialDepositPaid: boolean) => void;
   updateCustomerStatus: (customerId: string, status: CustomerStatus, notes?: string) => Promise<void>;
-  recordCustomerPayment: (customerId: string, notes?: string) => Promise<void>;
+  recordCustomerPayment: (customerId: string, notes?: string, paidAt?: string, paymentChannel?: string) => Promise<void>;
   createTroubleTicket: (ticketData: Partial<TroubleTicket>) => void;
   resolveTicketRemotely: (ticketId: string, notes: string) => void;
   escalateTicketToLeadTech: (
@@ -92,8 +92,8 @@ interface IOMSContextType {
     },
   ) => Promise<void>;
   rejectWorkOrderPppoe: (workOrderId: string, notes: string) => Promise<void>;
-  confirmInstallationCashPayment: (workOrderId: string, notes?: string) => Promise<void>;
-  confirmInstallationTransferPayment: (workOrderId: string, notes?: string) => Promise<void>;
+  confirmInstallationCashPayment: (workOrderId: string, notes?: string, paymentChannel?: string) => Promise<void>;
+  confirmInstallationTransferPayment: (workOrderId: string, notes?: string, paymentChannel?: string) => Promise<void>;
   submitFieldTechReport: (
     woOrTicketId: string,
     isWorkOrder: boolean,
@@ -456,10 +456,10 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await refreshAll();
   });
 
-  const recordCustomerPayment = (customerId: string, notes?: string) => runMutation(async () => {
+  const recordCustomerPayment = (customerId: string, notes?: string, paidAt?: string, paymentChannel?: string) => runMutation(async () => {
     await apiRequest(`/customers/${customerId}/record-payment`, {
       method: 'POST',
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({ notes, paid_at: paidAt, payment_channel: paymentChannel }),
     });
     await refreshAll();
     triggerCelebration();
@@ -561,19 +561,19 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await refreshAll();
   });
 
-  const confirmInstallationCashPayment = (workOrderId: string, notes?: string) => runStrictMutation(async () => {
+  const confirmInstallationCashPayment = (workOrderId: string, notes?: string, paymentChannel?: string) => runStrictMutation(async () => {
     await apiRequest(`/work-orders/${workOrderId}/confirm-installation-cash`, {
       method: 'POST',
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({ notes, payment_channel: paymentChannel }),
     });
     await refreshAll();
     triggerCelebration();
   });
 
-  const confirmInstallationTransferPayment = (workOrderId: string, notes?: string) => runStrictMutation(async () => {
+  const confirmInstallationTransferPayment = (workOrderId: string, notes?: string, paymentChannel?: string) => runStrictMutation(async () => {
     await apiRequest(`/work-orders/${workOrderId}/confirm-installation-transfer`, {
       method: 'POST',
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({ notes, payment_channel: paymentChannel }),
     });
     await refreshAll();
     triggerCelebration();
