@@ -1,19 +1,23 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
-  Check,
+  AlertTriangle,
+  ArrowRight,
   CheckCircle2,
+  Cpu,
+  Layers,
   Network,
   Radio,
   Send,
+  Server,
+  ShieldAlert,
   ShieldCheck,
-  Terminal,
   Wifi,
   Zap,
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
-import { TroubleTicket } from '../../types';
+import { Customer, NetworkODP, TroubleTicket, WorkOrder } from '../../types';
 import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
 import { NotesActionModal } from '../modals/NotesActionModal';
 
@@ -28,54 +32,121 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
     customers,
     tickets,
     workOrders,
+    networkOdps,
+    auditLogs,
     resolveTicketRemotely,
     escalateTicketToLeadTech,
   } = useIOMS();
   const navigate = useNavigate();
 
-  const [terminalLog, setTerminalLog] = useState<string[]>(() => [
-    '[OLT-ZTE-C320-SDA] Connected via Telnet/SSH (10.20.0.10:23) - OK',
-    '[GPON-OLT] Auto-discovery daemon running on rack 1 slot 1...',
-    '[MIKROTIK-CORE] CCR2004-16G-2S+ RADIUS / PPPoE active sessions: 842',
-    '[TELEMETRY] Optical Power polling interval: 15s. All PON lasers active.',
-  ]);
-  const [cliCommand, setCliCommand] = useState<string>('show gpon onu state gpon-olt_1/1/1');
   const [ticketActionTarget, setTicketActionTarget] = useState<{ ticket: TroubleTicket; action: NocConsoleAction } | null>(null);
   const [ticketActionNotes, setTicketActionNotes] = useState('');
   const [ticketNeedsReplacement, setTicketNeedsReplacement] = useState(false);
   const [ticketActionSaving, setTicketActionSaving] = useState(false);
-  const pendingNocTickets = tickets.filter((ticket) => ticket.status === 'open' || ticket.status === 'in_noc_review');
-  const escalatedCount = tickets.filter((ticket) => ticket.status === 'assigned_to_lead' || ticket.status === 'field_progress').length;
-  const lowSignalCustomers = customers.filter((customer) => customer.opticalPowerDbm < -25).length;
-  const pendingPppoeRequests = workOrders.filter((item) => item.type === 'installation' && item.pppoeRequestStatus === 'pending_noc').length;
+  const [odpFilterRegion, setOdpFilterRegion] = useState<string>('all');
+  const [signalSearch, setSignalSearch] = useState<string>('');
 
-  const runCliSim = () => {
-    if (!cliCommand.trim()) return;
-    const cmd = cliCommand.trim();
-    const timestamp = new Date().toLocaleTimeString();
+  // 1. Real KPI Calculations
+  const pendingNocTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.status === 'open' || ticket.status === 'in_noc_review'),
+    [tickets],
+  );
 
-    let output = '';
-    if (cmd.includes('show gpon onu state')) {
-      output = `[${timestamp}] OnuIndex: 1/1/1:1 | AdminState: enable | AuthState: authenticated | PhaseState: working | Channel: GPON`;
-    } else if (cmd.includes('power') || cmd.includes('attenuation')) {
-      output = `[${timestamp}] ONU Rx optical power: -20.8 dBm (Normal) | OLT Rx power: -19.4 dBm | Temperature: 42C | Voltage: 3.28V`;
-    } else if (cmd.includes('ppp') || cmd.includes('mikrotik')) {
-      output = `[${timestamp}] PPPoE Session sda1042@isp.net [UP] uptime 14d 02h 11m, rate: 50M/50M, remote-ip 10.20.14.42`;
-    } else {
-      output = `[${timestamp}] Executed: "${cmd}" -> Status: 200 OK (Device synchronized)`;
+  const escalatedCount = useMemo(
+    () => tickets.filter((ticket) => ticket.status === 'assigned_to_lead' || ticket.status === 'field_progress').length,
+    [tickets],
+  );
+
+  const pendingPppoeWorkOrders = useMemo(
+    () => workOrders.filter((item) => item.type === 'installation' && item.pppoeRequestStatus === 'pending_noc'),
+    [workOrders],
+  );
+
+  const pendingQcWorkOrders = useMemo(
+    () => workOrders.filter((item) => item.status === 'menunggu_qc_noc'),
+    [workOrders],
+  );
+
+  const lowSignalCustomers = useMemo(
+    () => customers.filter((customer) => (customer.opticalPowerDbm || 0) < -25),
+    [customers],
+  );
+
+  const activeCustomersCount = useMemo(
+    () => customers.filter((customer) => customer.status === 'active').length,
+    [customers],
+  );
+
+  // 2. Real Infrastructure & ODP Aggregations
+  const totalOdpPorts = useMemo(
+    () => networkOdps.reduce((sum, odp) => sum + (odp.totalPorts || 0), 0),
+    [networkOdps],
+  );
+
+  const usedOdpPorts = useMemo(
+    () => networkOdps.reduce((sum, odp) => sum + (odp.usedPorts || 0), 0),
+    [networkOdps],
+  );
+
+  const availableOdpPorts = Math.max(0, totalOdpPorts - usedOdpPorts);
+  const overallPortUtilization = totalOdpPorts > 0 ? Math.round((usedOdpPorts / totalOdpPorts) * 100) : 0;
+
+  // Group ODPs by Region
+  const regionOdpStats = useMemo(() => {
+    const map = new Map<string, { region: string; totalOdps: number; totalPorts: number; usedPorts: number; oltHosts: Set<string> }>();
+
+    networkOdps.forEach((odp) => {
+      const reg = odp.region || 'Lainnya';
+      const existing = map.get(reg) || { region: reg, totalOdps: 0, totalPorts: 0, usedPorts: 0, oltHosts: new Set<string>() };
+      existing.totalOdps += 1;
+      existing.totalPorts += odp.totalPorts || 0;
+      existing.usedPorts += odp.usedPorts || 0;
+      if (odp.oltHost) existing.oltHosts.add(odp.oltHost);
+      map.set(reg, existing);
+    });
+
+    return Array.from(map.values());
+  }, [networkOdps]);
+
+  const filteredOdps = useMemo(() => {
+    if (odpFilterRegion === 'all') return networkOdps;
+    return networkOdps.filter((odp) => odp.region === odpFilterRegion);
+  }, [networkOdps, odpFilterRegion]);
+
+  // 3. Real Signal Health Breakdown
+  const signalOptimalCount = customers.filter((c) => (c.opticalPowerDbm || 0) >= -22).length;
+  const signalWarningCount = customers.filter((c) => (c.opticalPowerDbm || 0) >= -25 && (c.opticalPowerDbm || 0) < -22).length;
+  const signalCriticalCount = customers.filter((c) => (c.opticalPowerDbm || 0) < -25).length;
+
+  const watchlistCustomers = useMemo(() => {
+    let list = customers.filter((c) => (c.opticalPowerDbm || 0) < -22);
+    if (signalSearch.trim()) {
+      const q = signalSearch.toLowerCase();
+      list = list.filter((c) =>
+        c.name.toLowerCase().includes(q)
+        || c.id.toLowerCase().includes(q)
+        || c.pppoeUsername.toLowerCase().includes(q)
+        || (c.odpId && c.odpId.toLowerCase().includes(q))
+      );
     }
+    return list.sort((a, b) => (a.opticalPowerDbm || 0) - (b.opticalPowerDbm || 0));
+  }, [customers, signalSearch]);
 
-    setTerminalLog((prev) => [...prev, `> ${cmd}`, output]);
-    setCliCommand('');
-  };
+  // 4. Real NOC-related Audit Logs
+  const nocAuditLogs = useMemo(() => {
+    return auditLogs.filter(
+      (log) => log.actorRole === 'noc' || log.action.toLowerCase().includes('pppoe') || log.action.toLowerCase().includes('qc') || log.action.toLowerCase().includes('ticket'),
+    ).slice(0, 8);
+  }, [auditLogs]);
 
+  // Handlers
   const openTicketActionModal = (ticket: TroubleTicket, action: NocConsoleAction) => {
     setTicketActionTarget({ ticket, action });
     setTicketNeedsReplacement(false);
     setTicketActionNotes(
       action === 'remote_resolve'
-        ? 'Konfigurasi OMCI selesai di-apply dan pelanggan kembali online.'
-        : 'Kabel FO drop wire putus di tiang PLN dan perlu kunjungan teknisi.',
+        ? 'Konfigurasi OMCI / profiling ulang berhasil diterapkan dan koneksi pelanggan kembali normal.'
+        : 'Indikasi kendala fisik kabel/perangkat lapangan, diperlukan penanganan teknisi langsung.',
     );
   };
 
@@ -110,146 +181,367 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
 
   return (
     <div className="space-y-6">
+      {/* 1. Real-time Operations Hero */}
       <WorkspaceOpsHero
-        eyebrow="NOC Operations"
-        title="Triage tiket gangguan, monitoring sinyal, dan console teknis NOC"
-        subtitle="Dashboard utama NOC untuk pemantauan tiket gangguan aktif, kualitas sinyal pelanggan, dan referensi perangkat inti."
+        eyebrow="Network Operations Center"
+        title="Monitoring Jaringan, Kredensial PPPoE, QC & Triage Gangguan"
+        subtitle="Dashboard sentral NOC dengan data real-time: antrean tiket gangguan, aktivasi PPPoE, verifikasi QC teknisi, dan kualitas redaman pelanggan."
         stats={[
           {
-            label: 'Pending Review',
-            value: pendingNocTickets.length,
-            description: 'Tiket gangguan yang masih menunggu triage dan analisa remote NOC.',
+            label: 'Review Gangguan',
+            value: `${pendingNocTickets.length} Tiket`,
+            description: `${escalatedCount} tiket lainnya sedang ditangani teknisi lapangan.`,
             icon: ShieldCheck,
+            accentClass: 'bg-amber-400/15 text-amber-200',
+          },
+          {
+            label: 'Request PPPoE',
+            value: `${pendingPppoeWorkOrders.length} WO`,
+            description: 'Permintaan akun PPPoE pasang baru dari teknisi lapangan.',
+            icon: Wifi,
             accentClass: 'bg-sky-400/15 text-sky-200',
           },
           {
-            label: 'Diteruskan ke Lapangan',
-            value: escalatedCount,
-            description: 'Tiket yang sudah dibuatkan WO maintenance dan sedang berjalan di lapangan.',
-            icon: Send,
-            accentClass: 'bg-emerald-400/15 text-emerald-200',
+            label: 'QC Verifikasi',
+            value: `${pendingQcWorkOrders.length} WO`,
+            description: 'Pemasangan/perbaikan selesai menunggu konfirmasi QC NOC.',
+            icon: CheckCircle2,
+            accentClass: 'bg-violet-400/15 text-violet-200',
           },
           {
-            label: 'Low Signal',
-            value: lowSignalCustomers,
-            description: 'Pelanggan existing dengan redaman di bawah ambang aman.',
+            label: 'Sinyal Kritis',
+            value: `${lowSignalCustomers.length} Pelanggan`,
+            description: 'Pelanggan dengan redaman optik di bawah -25 dBm.',
             icon: Activity,
             accentClass: 'bg-rose-400/15 text-rose-200',
           },
           {
-            label: 'Core Status',
-            value: 'Synced',
-            description: 'RADIUS, PPPoE, dan telemetri inti berada dalam status sinkron.',
+            label: 'Pelanggan Aktif',
+            value: `${activeCustomersCount} Sesi`,
+            description: 'Total pelanggan berstatus aktif di seluruh jaringan.',
             icon: Radio,
-            accentClass: 'bg-violet-400/15 text-violet-200',
-          },
-          {
-            label: 'Request PPPoE',
-            value: pendingPppoeRequests,
-            description: 'Permintaan PPPoE dari teknisi lapangan yang menunggu pengisian NOC.',
-            icon: Wifi,
-            accentClass: 'bg-cyan-400/15 text-cyan-200',
+            accentClass: 'bg-emerald-400/15 text-emerald-200',
           },
         ]}
       />
 
-      <WorkspaceSectionShell
-        eyebrow="PPPoE"
-        title="Request PPPoE"
-        badge={`${pendingPppoeRequests} menunggu`}
-        actions={(
-          <button
-            type="button"
-            onClick={() => navigate('/app/request-pppoe-noc')}
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-          >
-            Buka Request PPPoE
-          </button>
-        )}
-      >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-5">
-            <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Pending NOC</div>
-            <div className="mt-2 text-3xl font-black text-slate-950">{pendingPppoeRequests}</div>
+      {/* 2. Quick Action Modules Banners */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Request PPPoE Card */}
+        <div className="flex flex-col justify-between rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                  <Wifi className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-950">Aktivasi Kredensial PPPoE</h3>
+                  <p className="text-xs text-slate-500">Pasang baru menunggu pembuatan username & password</p>
+                </div>
+              </div>
+              <WorkspaceStatusPill
+                label={`${pendingPppoeWorkOrders.length} PENDING`}
+                tone={pendingPppoeWorkOrders.length > 0 ? 'sky' : 'neutral'}
+              />
+            </div>
+
+            {pendingPppoeWorkOrders.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2">
+                Tidak ada permintaan PPPoE yang tertunda saat ini. Semua instalasi baru telah memiliki akun.
+              </p>
+            ) : (
+              <div className="space-y-2 py-1">
+                {pendingPppoeWorkOrders.slice(0, 2).map((wo) => (
+                  <div key={wo.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-800">{wo.customerName}</span>
+                      <span className="text-[11px] text-slate-400 block">{wo.id} • {wo.packagePlan || 'Paket Internet'}</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-sky-700">{wo.region}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-5 md:col-span-2">
-            <div className="text-sm font-semibold text-slate-700">
-              Tekan indikator ini untuk membuka antrean pengisian username dan password PPPoE pasang baru.
+
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => navigate('/app/request-pppoe-noc')}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
+            >
+              <span>Buka Modul Request PPPoE</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* QC Verifikasi Card */}
+        <div className="flex flex-col justify-between rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-950">QC Verifikasi Lapangan</h3>
+                  <p className="text-xs text-slate-500">Pekerjaan teknisi selesai dan menunggu approval QC</p>
+                </div>
+              </div>
+              <WorkspaceStatusPill
+                label={`${pendingQcWorkOrders.length} SIAP QC`}
+                tone={pendingQcWorkOrders.length > 0 ? 'violet' : 'neutral'}
+              />
+            </div>
+
+            {pendingQcWorkOrders.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2">
+                Seluruh pekerjaan instalasi & perbaikan telah tuntas diverifikasi oleh tim NOC.
+              </p>
+            ) : (
+              <div className="space-y-2 py-1">
+                {pendingQcWorkOrders.slice(0, 2).map((wo) => (
+                  <div key={wo.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-800">{wo.customerName}</span>
+                      <span className="text-[11px] text-slate-400 block">{wo.id} • Teknisi: {wo.assignedTechName || 'Teknisi'}</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-violet-700">{wo.region}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => navigate('/app/qc-instalasi-noc')}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
+            >
+              <span>Buka Modul QC Instalasi NOC</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Real Infrastructure & ODP Capacity Overview */}
+      <WorkspaceSectionShell
+        eyebrow="Distribusi Jaringan Optik"
+        title="Kapasitas & Utilisasi ODP per Wilayah"
+        subtitle="Data real-time kapasitas port ODP terpasang dan utilisasi pelanggan dari database."
+        badge={`${networkOdps.length} ODP Terdaftar`}
+      >
+        <div className="space-y-6 p-5">
+          {/* Top Summary Cards */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total ODP</span>
+              <div className="mt-1 text-2xl font-black text-slate-900">{networkOdps.length} ODP</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Kapasitas</span>
+              <div className="mt-1 text-2xl font-black text-slate-900">{totalOdpPorts} Port</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Port Terpakai</span>
+              <div className="mt-1 text-2xl font-black text-emerald-700">{usedOdpPorts} Port</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Utilisasi Global</span>
+              <div className="mt-1 text-2xl font-black text-slate-900">{overallPortUtilization}%</div>
+            </div>
+          </div>
+
+          {/* Regional Aggregation Cards */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {regionOdpStats.map((reg) => {
+              const utilPercent = reg.totalPorts > 0 ? Math.round((reg.usedPorts / reg.totalPorts) * 100) : 0;
+              const hosts = Array.from(reg.oltHosts).join(', ') || 'OLT GPON Core';
+
+              return (
+                <div
+                  key={reg.region}
+                  className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-xs transition hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                        <Network className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900">{reg.region}</h4>
+                        <span className="text-[11px] text-slate-400">{hosts}</span>
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                        utilPercent >= 85
+                          ? 'bg-rose-100 text-rose-800'
+                          : utilPercent >= 60
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
+                      {utilPercent}% Kapasitas
+                    </span>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Total ODP: <strong>{reg.totalOdps} Unit</strong></span>
+                      <span>Port: <strong>{reg.usedPorts} / {reg.totalPorts}</strong></span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          utilPercent >= 85
+                            ? 'bg-rose-500'
+                            : utilPercent >= 60
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(100, utilPercent)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </WorkspaceSectionShell>
+
+      {/* 4. Real Signal Health & Watchlist Telemetry */}
+      <WorkspaceSectionShell
+        eyebrow="Telemetri Optik Pelanggan"
+        title="Kesehatan Sinyal & Watchlist Redaman Optik"
+        subtitle="Pemantauan redaman sinyal pelanggan aktual dari pengukuran terakhir."
+        badge={`${lowSignalCustomers.length} Perlu Perhatian`}
+      >
+        <div className="p-5 space-y-6">
+          {/* Signal Level Cards */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+              <div>
+                <span className="text-xs font-bold text-emerald-800">Sinyal Optimal (≥ -22 dBm)</span>
+                <div className="mt-1 text-2xl font-black text-emerald-950">{signalOptimalCount} Pelanggan</div>
+              </div>
+              <CheckCircle2 className="h-8 w-8 text-emerald-600/70" />
+            </div>
+
+            <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+              <div>
+                <span className="text-xs font-bold text-amber-800">Waspada (-23 s/d -25 dBm)</span>
+                <div className="mt-1 text-2xl font-black text-amber-950">{signalWarningCount} Pelanggan</div>
+              </div>
+              <AlertTriangle className="h-8 w-8 text-amber-600/70" />
+            </div>
+
+            <div className="flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
+              <div>
+                <span className="text-xs font-bold text-rose-800">Kritis (&lt; -25 dBm)</span>
+                <div className="mt-1 text-2xl font-black text-rose-950">{signalCriticalCount} Pelanggan</div>
+              </div>
+              <ShieldAlert className="h-8 w-8 text-rose-600/70" />
+            </div>
+          </div>
+
+          {/* Watchlist Table */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h4 className="text-sm font-black text-slate-900">Daftar Pelanggan Redaman Tinggi (Watchlist)</h4>
+              <input
+                type="text"
+                value={signalSearch}
+                onChange={(e) => setSignalSearch(e.target.value)}
+                placeholder="Cari nama, ID, PPPoE, atau ODP..."
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:border-emerald-300 focus:bg-white focus:outline-hidden"
+              />
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="min-w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50 font-semibold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Pelanggan</th>
+                    <th className="px-4 py-3">User PPPoE & Paket</th>
+                    <th className="px-4 py-3">ODP & Wilayah</th>
+                    <th className="px-4 py-3">SN ONT</th>
+                    <th className="px-4 py-3 text-right">Redaman Optik (dBm)</th>
+                    <th className="px-4 py-3 text-right">Status Sinyal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {watchlistCustomers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                        Tidak ada pelanggan dalam kategori redaman kritis saat ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    watchlistCustomers.slice(0, 10).map((cust) => {
+                      const dbm = cust.opticalPowerDbm ?? -20;
+                      const isCritical = dbm < -25;
+
+                      return (
+                        <tr key={cust.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="px-4 py-3 font-bold text-slate-900">
+                            <div>{cust.name}</div>
+                            <span className="text-[11px] font-mono font-normal text-slate-400">{cust.id}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-slate-700">{cust.pppoeUsername}</span>
+                            <span className="text-[11px] text-slate-500 block">{cust.packagePlan}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-semibold text-slate-800">{cust.odpId || '-'}</span>
+                            <span className="text-[11px] text-slate-400 block">{cust.region}</span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-slate-600">
+                            {cust.ontSerialNumber || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold">
+                            <span className={isCritical ? 'text-rose-600' : 'text-amber-600'}>
+                              {dbm.toFixed(1)} dBm
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                isCritical ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {isCritical ? 'KRITIS' : 'WARNING'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </WorkspaceSectionShell>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        {[
-          {
-            code: 'ZTE',
-            title: 'OLT ZTE C320 (Sidoarjo)',
-            subtitle: 'IP 10.20.0.10 | Slot GTGO 8-Port',
-            stats: [
-              'Total ONT terdaftar: 542 Unit (GPON)',
-              'Laser TX Power: +5.2 dBm (Class C++)',
-              'Rata-rata redaman ODP: -20.4 dBm',
-            ],
-            tone: 'bg-emerald-50 text-emerald-800',
-          },
-          {
-            code: 'HUA',
-            title: 'OLT Huawei MA5608T (Waru)',
-            subtitle: 'IP 10.20.0.20 | Slot GPBD 8-Port',
-            stats: [
-              'Total ONT terdaftar: 308 Unit (GPON)',
-              'Laser TX Power: +4.8 dBm (Class C+)',
-              'Rata-rata redaman ODP: -19.8 dBm',
-            ],
-            tone: 'bg-rose-50 text-rose-800',
-          },
-          {
-            code: 'ROS',
-            title: 'Mikrotik CCR2004 (Core BRAS)',
-            subtitle: 'RouterOS v7.14 | Up 48 Days',
-            stats: [
-              'Active PPPoE sessions: 842 / 850 online',
-              'Random password security: 10-char strict mode',
-              'Aggregate bandwidth: 4.82 Gbps / 10 Gbps',
-            ],
-            tone: 'bg-slate-900 text-white',
-          },
-        ].map((card) => (
-          <div key={card.title} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xs font-black ${card.tone}`}>
-                  {card.code}
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-950">{card.title}</h3>
-                  <p className="text-xs text-slate-500">{card.subtitle}</p>
-                </div>
-              </div>
-              <WorkspaceStatusPill label="ONLINE 100%" tone="emerald" />
-            </div>
-            <div className="mt-4 space-y-2 text-xs text-slate-600">
-              {card.stats.map((stat) => (
-                <div key={stat} className="rounded-2xl bg-slate-50 px-3 py-2">
-                  {stat}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
+      {/* 5. Real Ticket Triage Queue */}
       <WorkspaceSectionShell
         eyebrow="Ticket Triage"
-        title="Antrean tiket gangguan yang perlu tindakan NOC"
-        subtitle="Gunakan area ini untuk triage remote, eskalasi ke kepala teknisi, dan membuka riwayat lengkap ticket."
+        title="Antrean Tiket Gangguan yang Perlu Tindakan NOC"
+        subtitle="Gunakan area ini untuk analisa remote, eskalasi ke kepala teknisi, atau menyelesaikan perbaikan konfigurasi."
         badge={`${pendingNocTickets.length} tiket menunggu tindakan`}
       >
         {pendingNocTickets.length === 0 ? (
           <div className="p-10 text-center text-slate-400">
             <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-500" />
-            <p className="text-sm font-semibold text-slate-700">Semua sinyal OLT dan tiket NOC aman</p>
+            <p className="text-sm font-semibold text-slate-700">Semua sinyal dan tiket NOC terkendali</p>
             <p className="mt-0.5 text-xs text-slate-500">Tidak ada antrean tiket yang membutuhkan verifikasi teknis saat ini.</p>
           </div>
         ) : (
@@ -264,7 +556,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">{ticket.id}</span>
                         <WorkspaceStatusPill
-                          label="TRIAGE NOC"
+                          label={ticket.status === 'in_noc_review' ? 'IN NOC REVIEW' : 'OPEN'}
                           tone="amber"
                         />
                         <span className="text-xs text-slate-400">{ticket.createdAt}</span>
@@ -286,25 +578,24 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-3 text-xs">
                           <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">SN ONT</span>
-                          <span className="mt-1 block font-mono font-semibold text-slate-800">{customer?.ontSerialNumber || 'ZTEGCA48B21F'}</span>
+                          <span className="mt-1 block font-mono font-semibold text-slate-800">{customer?.ontSerialNumber || '-'}</span>
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-3 text-xs">
                           <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Redaman Terakhir</span>
                           <span className={`mt-1 block font-mono font-bold ${(customer?.opticalPowerDbm || 0) < -25 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                            {customer?.opticalPowerDbm ? `${customer.opticalPowerDbm} dBm` : '-20.5 dBm'}
+                            {customer?.opticalPowerDbm ? `${customer.opticalPowerDbm} dBm` : '-'}
                           </span>
                         </div>
                       </div>
-
                     </div>
 
                     <div className="w-full shrink-0 rounded-[24px] border border-slate-200 bg-slate-50 p-4 xl:w-80">
                       <p className="text-sm font-black text-slate-950">Tindakan Cepat NOC</p>
-                      <div className="mt-4 space-y-3">
+                      <div className="mt-4 space-y-2.5">
                         <button
                           type="button"
                           onClick={() => openTicketActionModal(ticket, 'remote_resolve')}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700 shadow-xs"
                         >
                           <Zap className="h-3.5 w-3.5" />
                           Selesai Remote ke Helpdesk QC
@@ -312,7 +603,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
                         <button
                           type="button"
                           onClick={() => openTicketActionModal(ticket, 'escalate')}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-sky-700"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-sky-700 shadow-xs"
                         >
                           <Send className="h-3.5 w-3.5" />
                           Kirim WO ke Kepala Teknisi
@@ -321,7 +612,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
                         <button
                           type="button"
                           onClick={() => onSelectTicket(ticket)}
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
                         >
                           Buka Riwayat Lengkap
                         </button>
@@ -335,50 +626,34 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
         )}
       </WorkspaceSectionShell>
 
-      <WorkspaceSectionShell
-        eyebrow="Console NOC"
-        title="Interactive OLT / Mikrotik Console CLI"
-        subtitle="Panel teknis untuk memeriksa ONU state, redaman, dan sesi PPPoE tanpa meninggalkan dashboard NOC."
-        badge="ZTE ZXROS v4.1 / RouterOS 7"
-      >
-        <div className="overflow-hidden bg-slate-950 text-xs font-mono text-emerald-400">
-          <div className="border-b border-slate-800 bg-slate-900 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-slate-200">
-              <Terminal className="h-4 w-4 text-emerald-400" />
-              <span className="font-bold">Live Console Simulation</span>
-            </div>
-            <WorkspaceStatusPill label="CORE SYNCED" tone="sky" />
-          </div>
-
-          <div className="max-h-64 space-y-1 overflow-y-auto bg-black/40 p-4">
-            {terminalLog.map((line, index) => (
-              <div key={`${line}-${index}`} className={line.startsWith('>') ? 'font-bold text-amber-300' : 'text-emerald-400/90'}>
-                {line}
+      {/* 6. Real NOC Activity & Audit Stream */}
+      {nocAuditLogs.length > 0 && (
+        <WorkspaceSectionShell
+          eyebrow="Riwayat Audit NOC"
+          title="Aktivitas & Log Operasional NOC Terkini"
+          badge={`${nocAuditLogs.length} aktivitas`}
+        >
+          <div className="divide-y divide-slate-100 p-2">
+            {nocAuditLogs.map((log) => (
+              <div key={log.id} className="flex items-center justify-between p-3 text-xs hover:bg-slate-50 rounded-xl transition">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900">{log.action}</span>
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">{log.target}</span>
+                  </div>
+                  <p className="text-slate-500">{log.details}</p>
+                </div>
+                <div className="text-right shrink-0 ml-4">
+                  <span className="font-semibold text-slate-700 block">{log.actorName}</span>
+                  <span className="text-[10px] text-slate-400">{log.timestamp}</span>
+                </div>
               </div>
             ))}
           </div>
+        </WorkspaceSectionShell>
+      )}
 
-          <div className="flex items-center gap-2 border-t border-slate-800 bg-slate-900/90 p-3">
-            <span className="select-none text-slate-400">#</span>
-            <input
-              type="text"
-              value={cliCommand}
-              onChange={(event) => setCliCommand(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && runCliSim()}
-              placeholder="Ketik command seperti show gpon onu state atau mikrotik /ppp active print..."
-              className="flex-1 bg-transparent text-xs text-emerald-300 placeholder-slate-600 focus:outline-hidden"
-            />
-            <button
-              type="button"
-              onClick={runCliSim}
-              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-emerald-500"
-            >
-              Execute
-            </button>
-          </div>
-        </div>
-      </WorkspaceSectionShell>
-
+      {/* Action Modal for Ticket Resolve / Escalate */}
       <NotesActionModal
         open={ticketActionTarget !== null}
         title={
