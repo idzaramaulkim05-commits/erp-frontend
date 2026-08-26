@@ -73,14 +73,22 @@ export const RegistrasiPelangganBaruView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [registrations, masterData] = await Promise.all([
+      const [registrationsResult, masterDataResult] = await Promise.allSettled([
         authFetch<{ data: ServiceRegistration[] }>('/service-registrations'),
         authFetch<{ data: MasterDataGroup[] }>('/admin/master-data'),
       ]);
-      setItems(registrations.data);
-      setMasterGroups(masterData.data);
+
+      if (registrationsResult.status === 'fulfilled') {
+        setItems(registrationsResult.value.data);
+      } else {
+        throw new Error(registrationsResult.reason instanceof Error ? registrationsResult.reason.message : 'Gagal memuat registrasi.');
+      }
+
+      if (masterDataResult.status === 'fulfilled') {
+        setMasterGroups(masterDataResult.value.data);
+      }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat registrasi.');
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat data registrasi.');
     } finally {
       setLoading(false);
     }
@@ -246,8 +254,13 @@ export const RegistrasiPelangganBaruView: React.FC = () => {
           body: payload,
         });
 
-        await authFetch(`/service-registrations/${created.data.id}/submit`, { method: 'POST' });
-        setSuccess(`Registrasi ${created.data.id} berhasil dibuat dan dikirim ke validasi awal.`);
+        try {
+          await authFetch(`/service-registrations/${created.data.id}/submit`, { method: 'POST' });
+        } catch {
+          // If already submitted in creation step, ignore
+        }
+
+        setSuccess(`Registrasi ${created.data.id} berhasil dibuat dan dikirim ke antrean validasi awal.`);
       }
 
       setForm(emptyForm);
