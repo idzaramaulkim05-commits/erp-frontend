@@ -1,12 +1,11 @@
-import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle,
+  Boxes,
   Eye,
   Inbox,
   Package,
   PackagePlus,
-  Warehouse,
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
 import { ProcurementRequest } from '../../types';
@@ -14,7 +13,7 @@ import { ConfirmActionModal } from '../modals/ConfirmActionModal';
 import { NewProcurementModal } from '../modals/NewProcurementModal';
 import { NotesActionModal } from '../modals/NotesActionModal';
 import { ViewProofModal } from '../modals/ViewProofModal';
-import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
+import { WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
 
 interface InventoryWarehouseViewProps {
   onOpenNewProcurement: () => void;
@@ -25,14 +24,12 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
 }) => {
   const navigate = useNavigate();
   const {
-    inventory,
     procurementRequests,
     receiveProcurementStock,
     markProcurementAsOrdered,
     searchQuery,
   } = useIOMS();
 
-  const [activeTab, setActiveTab] = useState<'stock' | 'procurement'>('stock');
   const [editingRequest, setEditingRequest] = useState<ProcurementRequest | null>(null);
   const [orderedTarget, setOrderedTarget] = useState<ProcurementRequest | null>(null);
   const [receiveTarget, setReceiveTarget] = useState<ProcurementRequest | null>(null);
@@ -49,33 +46,28 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
   const [orderedNotes, setOrderedNotes] = useState('Pembelian ke vendor sudah diproses oleh kepala warehouse.');
   const [actionLoading, setActionLoading] = useState(false);
 
-  const filteredInventory = inventory.filter((item) => {
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      return (
-        item.name.toLowerCase().includes(query) ||
-        item.code.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query) ||
-        item.brand.toLowerCase().includes(query)
-      );
-    }
-
-    return true;
-  });
-
-  const criticalStockCount = inventory.filter((item) => item.stockAvailable <= item.minThreshold).length;
-  const pendingProcurementCount = procurementRequests.filter((request) => request.status === 'pending_finance' || request.status === 'pending_management').length;
-  const orderedProcurementCount = procurementRequests.filter((request) => request.status === 'ordered').length;
+  // Filter requests based on search query
+  const filteredRequests = useMemo(() => {
+    if (!searchQuery.trim()) return procurementRequests;
+    const q = searchQuery.toLowerCase();
+    return procurementRequests.filter((r) => {
+      const cleanName = r.itemName.toLowerCase();
+      const code = (r.itemCode || '').toLowerCase();
+      const id = r.id.toLowerCase();
+      const reason = (r.reason || '').toLowerCase();
+      return cleanName.includes(q) || code.includes(q) || id.includes(q) || reason.includes(q);
+    });
+  }, [procurementRequests, searchQuery]);
 
   const procurementByStatus = useMemo(
     () => ({
-      pendingFinance: procurementRequests.filter((request) => request.status === 'pending_finance' || request.status === 'pending_management' || request.status === 'pending_payment'),
-      rejected: procurementRequests.filter((request) => request.status === 'rejected'),
-      approved: procurementRequests.filter((request) => request.status === 'approved'),
-      ordered: procurementRequests.filter((request) => request.status === 'ordered'),
-      received: procurementRequests.filter((request) => request.status === 'received'),
+      pendingFinance: filteredRequests.filter((request) => request.status === 'pending_finance' || request.status === 'pending_management' || request.status === 'pending_payment'),
+      rejected: filteredRequests.filter((request) => request.status === 'rejected'),
+      approved: filteredRequests.filter((request) => request.status === 'approved'),
+      ordered: filteredRequests.filter((request) => request.status === 'ordered'),
+      received: filteredRequests.filter((request) => request.status === 'received'),
     }),
-    [procurementRequests],
+    [filteredRequests],
   );
 
   const renderProcurementCard = (request: ProcurementRequest) => {
@@ -226,227 +218,137 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <WorkspaceOpsHero
-        eyebrow="Warehouse Operations"
-        title="Kontrol stok gudang, material lapangan, dan penerimaan barang masuk"
-        subtitle="Workspace utama inventory untuk memantau kesiapan material, mengawasi stok kritis, dan menindaklanjuti procurement sampai barang diterima ke gudang."
-        stats={[
-          {
-            label: 'Total Item',
-            value: inventory.length,
-            description: 'Jumlah item inventaris aktif yang tercatat di gudang.',
-            icon: Package,
-            accentClass: 'bg-sky-400/15 text-sky-200',
-          },
-          {
-            label: 'Stok Kritis',
-            value: criticalStockCount,
-            description: 'Item yang stok siap pakainya sudah menyentuh ambang minimum.',
-            icon: AlertTriangle,
-            accentClass: 'bg-rose-400/15 text-rose-200',
-          },
-          {
-            label: 'Pending Procurement',
-            value: pendingProcurementCount,
-            description: 'Permintaan barang yang masih menunggu approval finance atau manajemen.',
-            icon: Warehouse,
-            accentClass: 'bg-amber-400/15 text-amber-200',
-          },
-          {
-            label: 'Ready Stock-In',
-            value: orderedProcurementCount,
-            description: 'Pengadaan yang sudah dibeli dan menunggu goods receipt ke stok.',
-            icon: Inbox,
-            accentClass: 'bg-emerald-400/15 text-emerald-200',
-          },
-        ]}
-      />
-
-      <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('stock')}
-              className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
-                activeTab === 'stock' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Stok Barang & Material ({inventory.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('procurement')}
-              className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
-                activeTab === 'procurement' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Permintaan Pengadaan ({procurementRequests.length})
-            </button>
+      {/* Top Header Card */}
+      <section className="rounded-[32px] border border-slate-200 bg-linear-to-br from-slate-900 via-slate-800 to-indigo-950 p-6 sm:p-8 text-white shadow-xl">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3.5 py-1 text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">
+              <Package className="h-4 w-4" />
+              <span>Log Pengadaan Gudang</span>
+            </div>
+            <h1 className="text-2xl font-black tracking-tight sm:text-4xl">
+              Alur Pengadaan & Penerimaan Barang
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
+              Monitoring status persetujuan pengadaan, konfirmasi pencairan dana oleh Finance, bukti transfer, proses pemesanan ke vendor, hingga penerimaan stok barang masuk (goods receipt).
+            </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate('/app/request-pengadaan-barang')}
-            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700 shadow-xs"
-          >
-            <PackagePlus className="h-4 w-4" />
-            Buat Permintaan Barang Baru
-          </button>
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate('/app/stok-barang')}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-white/20 shadow-xs"
+            >
+              <Boxes className="h-4 w-4 text-sky-300" />
+              <span>Lihat Stok & Material</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/app/request-pengadaan-barang')}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition hover:bg-emerald-700 shadow-md"
+            >
+              <PackagePlus className="h-4 w-4" />
+              <span>Buat Permintaan Barang</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {activeTab === 'stock' ? (
-        <WorkspaceSectionShell
-          eyebrow="Stock Overview"
-          title="Katalog inventaris dan kondisi stok gudang"
-          subtitle="Pencatatan modem, patch cord, kabel drop, perangkat pasif, dan material lapangan yang dipakai untuk operasional harian."
-          badge={`${filteredInventory.length} item terlihat`}
-        >
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
-              <thead className="border-b border-slate-200 bg-slate-50 font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Kode & Nama Barang</th>
-                  <th className="px-4 py-3">Kategori & Brand</th>
-                  <th className="px-4 py-3">Lokasi Rak</th>
-                  <th className="px-4 py-3 text-center">Stok Ready</th>
-                  <th className="px-4 py-3 text-center">Terpasang</th>
-                  <th className="px-4 py-3">Harga Satuan</th>
-                  <th className="px-4 py-3 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredInventory.map((item) => {
-                  const isLowStock = item.stockAvailable <= item.minThreshold;
-
-                  return (
-                    <tr key={item.id} className="transition-colors hover:bg-slate-50/70">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900">
-                          {item.name.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || item.code}
-                        </div>
-                        <div className="font-mono text-[11px] text-slate-400">{item.code}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{item.brand}</div>
-                        <div className="text-[11px] text-slate-500">{item.category}</div>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-600">{item.locationRack}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-sm font-extrabold text-slate-900">
-                          {item.stockAvailable} {item.unit}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center font-semibold text-slate-500">
-                        {item.stockInUse} {item.unit}
-                      </td>
-                      <td className="px-4 py-3 font-mono font-semibold text-slate-700">
-                        Rp {item.unitPrice.toLocaleString('id-ID')}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <WorkspaceStatusPill
-                          label={isLowStock ? `Stok Kritis (<= ${item.minThreshold})` : 'Aman'}
-                          tone={isLowStock ? 'rose' : 'emerald'}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </WorkspaceSectionShell>
-      ) : (
-        <WorkspaceSectionShell
-          eyebrow="Procurement Log"
-          title="Riwayat pengajuan dan penerimaan barang masuk"
-          subtitle="Warehouse mengelola pengadaan dari revisi, approval, ordered, sampai goods receipt pada satu tempat yang konsisten."
-          badge={`${procurementRequests.length} pengajuan terlihat`}
-        >
-          <div className="space-y-6 p-5 sm:p-6">
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black text-slate-900">Menunggu Finance / Manajemen</h3>
-                <WorkspaceStatusPill label={`${procurementByStatus.pendingFinance.length} antrean`} tone="amber" />
+      {/* Main Procurement Log Section */}
+      <WorkspaceSectionShell
+        eyebrow="Procurement Log"
+        title="Riwayat Pengajuan & Penerimaan Barang Masuk"
+        subtitle="Warehouse mengelola pengadaan dari revisi, approval, ordered, sampai goods receipt pada satu tempat yang konsisten."
+        badge={`${filteredRequests.length} pengajuan tercatat`}
+      >
+        <div className="space-y-6 p-5 sm:p-6">
+          {/* Section 1: Menunggu Finance / Direktur / Pembayaran */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-900">Menunggu Finance / Direktur / Bukti Bayar</h3>
+              <WorkspaceStatusPill label={`${procurementByStatus.pendingFinance.length} antrean`} tone="amber" />
+            </div>
+            {procurementByStatus.pendingFinance.length > 0 ? (
+              <div className="space-y-3">
+                {procurementByStatus.pendingFinance.map(renderProcurementCard)}
               </div>
-              {procurementByStatus.pendingFinance.length > 0 ? (
-                <div className="space-y-3">
-                  {procurementByStatus.pendingFinance.map(renderProcurementCard)}
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  Tidak ada pengajuan yang sedang menunggu approval.
-                </div>
-              )}
-            </section>
-
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black text-slate-900">Perlu Revisi</h3>
-                <WorkspaceStatusPill label={`${procurementByStatus.rejected.length} ditolak`} tone="rose" />
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Tidak ada pengajuan yang sedang menunggu approval atau pembayaran finance.
               </div>
-              {procurementByStatus.rejected.length > 0 ? (
-                <div className="space-y-3">
-                  {procurementByStatus.rejected.map(renderProcurementCard)}
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  Belum ada pengadaan yang perlu direvisi.
-                </div>
-              )}
-            </section>
+            )}
+          </section>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black text-slate-900">Approved</h3>
-                <WorkspaceStatusPill label={`${procurementByStatus.approved.length} siap dibeli`} tone="emerald" />
+          {/* Section 2: Perlu Revisi */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-900">Perlu Revisi</h3>
+              <WorkspaceStatusPill label={`${procurementByStatus.rejected.length} ditolak`} tone="rose" />
+            </div>
+            {procurementByStatus.rejected.length > 0 ? (
+              <div className="space-y-3">
+                {procurementByStatus.rejected.map(renderProcurementCard)}
               </div>
-              {procurementByStatus.approved.length > 0 ? (
-                <div className="space-y-3">
-                  {procurementByStatus.approved.map(renderProcurementCard)}
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  Belum ada pengadaan approved yang siap ditandai ordered.
-                </div>
-              )}
-            </section>
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Belum ada pengadaan yang perlu direvisi.
+              </div>
+            )}
+          </section>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black text-slate-900">Sedang Dibeli / Ordered</h3>
-                <WorkspaceStatusPill label={`${procurementByStatus.ordered.length} menunggu barang`} tone="violet" />
+          {/* Section 3: Approved / Siap Dipesan */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-900">Disetujui & Siap Dipesan (Approved)</h3>
+              <WorkspaceStatusPill label={`${procurementByStatus.approved.length} siap dibeli`} tone="emerald" />
+            </div>
+            {procurementByStatus.approved.length > 0 ? (
+              <div className="space-y-3">
+                {procurementByStatus.approved.map(renderProcurementCard)}
               </div>
-              {procurementByStatus.ordered.length > 0 ? (
-                <div className="space-y-3">
-                  {procurementByStatus.ordered.map(renderProcurementCard)}
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  Belum ada pengadaan yang sedang dibeli.
-                </div>
-              )}
-            </section>
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Tidak ada pengadaan yang sedang menunggu pemesanan ke vendor.
+              </div>
+            )}
+          </section>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black text-slate-900">Sudah Diterima</h3>
-                <WorkspaceStatusPill label={`${procurementByStatus.received.length} selesai`} tone="sky" />
+          {/* Section 4: Sedang Dibeli (Ordered) */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-900">Sedang Dipesan / Dibeli (Ordered)</h3>
+              <WorkspaceStatusPill label={`${procurementByStatus.ordered.length} diproses`} tone="violet" />
+            </div>
+            {procurementByStatus.ordered.length > 0 ? (
+              <div className="space-y-3">
+                {procurementByStatus.ordered.map(renderProcurementCard)}
               </div>
-              {procurementByStatus.received.length > 0 ? (
-                <div className="space-y-3">
-                  {procurementByStatus.received.map(renderProcurementCard)}
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  Belum ada pengadaan yang selesai diterima.
-                </div>
-              )}
-            </section>
-          </div>
-        </WorkspaceSectionShell>
-      )}
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Tidak ada pengadaan yang sedang dalam proses pengiriman vendor.
+              </div>
+            )}
+          </section>
+
+          {/* Section 5: Selesai Diterima (Received) */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-900">Selesai Diterima & Masuk Stok Gudang</h3>
+              <WorkspaceStatusPill label={`${procurementByStatus.received.length} diterima`} tone="sky" />
+            </div>
+            {procurementByStatus.received.length > 0 ? (
+              <div className="space-y-3">
+                {procurementByStatus.received.map(renderProcurementCard)}
+              </div>
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Belum ada riwayat penerimaan barang masuk.
+              </div>
+            )}
+          </section>
+        </div>
+      </WorkspaceSectionShell>
 
       <NewProcurementModal
         open={editingRequest !== null}

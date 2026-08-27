@@ -38,6 +38,7 @@ export type AppModule =
   | 'field_tech'
   | 'finance'
   | 'inventory'
+  | 'stok_barang'
   | 'request_pengadaan_barang'
   | 'kanban'
   | 'network_map'

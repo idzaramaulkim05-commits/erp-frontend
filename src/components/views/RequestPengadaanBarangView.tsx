@@ -199,11 +199,19 @@ export const RequestPengadaanBarangView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
               type="button"
+              onClick={() => navigate('/app/stok-barang')}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-white/20 shadow-xs"
+            >
+              <Boxes className="h-4 w-4 text-sky-300" />
+              <span>Stok & Material Gudang</span>
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/app/inventory')}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-white/20 shadow-xs"
             >
               <Warehouse className="h-4 w-4 text-emerald-300" />
-              <span>Warehouse Console</span>
+              <span>Log Pengadaan Barang</span>
             </button>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   BadgeInfo,
+  Boxes,
   CheckCircle2,
   Columns,
   ClipboardList,
@@ -61,6 +62,7 @@ const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>
   field_tech: Shield,
   finance: Radio,
   inventory: Package,
+  stok_barang: Boxes,
   request_pengadaan_barang: PackagePlus,
   kanban: Columns,
   network_map: Wifi,

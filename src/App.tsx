@@ -41,6 +41,7 @@ import { SurveyInstalasiView } from './components/views/SurveyInstalasiView';
 import { RequestGudangInstalasiView } from './components/views/RequestGudangInstalasiView';
 import { AktivasiInstalasiView } from './components/views/AktivasiInstalasiView';
 import { RequestPengadaanBarangView } from './components/views/RequestPengadaanBarangView';
+import { StokBarangView } from './components/views/StokBarangView';
 
 // Modals
 import { NewTicketModal } from './components/modals/NewTicketModal';
@@ -215,6 +216,8 @@ const MainIOMSApp: React.FC = () => {
             onOpenNewProcurement={() => setIsProcurementModalOpen(true)}
           />
         );
+      case 'stok_barang':
+        return <StokBarangView />;
       case 'request_pengadaan_barang':
         return <RequestPengadaanBarangView />;
       case 'kanban':
