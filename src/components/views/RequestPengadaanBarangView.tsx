@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -84,17 +84,18 @@ export const RequestPengadaanBarangView: React.FC = () => {
       applySelectedItem(initialItem);
     } else {
       setSelectedItemValue(SPECIAL_ITEM_VALUE);
-      setItemCode('CUSTOM-ITEM');
-      setItemName('Material Lainnya / Khusus');
+      setItemCode('');
+      setItemName('');
       setUnit('Unit');
-      setUnitPrice(100000);
+      setUnitPrice(0);
     }
   }, [inventory, criticalItems]);
 
   const applySelectedItem = (item: InventoryItem) => {
+    const cleanName = item.name.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || item.code;
     setSelectedItemValue(item.code);
     setItemCode(item.code);
-    setItemName(item.name);
+    setItemName(cleanName);
     setUnit(item.unit);
     setUnitPrice(item.unitPrice);
     setQuantity(Math.max(item.minThreshold * 2, 20));
@@ -107,7 +108,7 @@ export const RequestPengadaanBarangView: React.FC = () => {
 
     if (value === SPECIAL_ITEM_VALUE) {
       setItemCode('');
-      setItemName('Material Lainnya / Khusus');
+      setItemName('');
       setUnitPrice(0);
       setUnit('Unit');
       return;
@@ -134,10 +135,16 @@ export const RequestPengadaanBarangView: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const finalCode = (itemCode.trim() || deriveItemCode(itemName)).toUpperCase();
+      let cleanName = itemName.trim();
+      cleanName = cleanName.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim();
+      if (!cleanName) {
+        cleanName = itemCode.trim() || 'Perangkat Baru';
+      }
+
+      const finalCode = (itemCode.trim() || deriveItemCode(cleanName)).toUpperCase();
       const payload = {
         itemCode: finalCode,
-        itemName: itemName.trim(),
+        itemName: cleanName,
         quantity: Number(quantity),
         unit: unit.trim() || 'Unit',
         unitPrice: Number(unitPrice),
@@ -148,7 +155,7 @@ export const RequestPengadaanBarangView: React.FC = () => {
       await createProcurementRequest(payload);
       triggerCelebration();
       setSuccessMessage(
-        `Permintaan pengadaan "${itemName}" (${quantity} ${unit}) senilai Rp ${totalAmount.toLocaleString('id-ID')} berhasil diajukan dan diteruskan ke Finance!`,
+        `Permintaan pengadaan "${cleanName}" (${quantity} ${unit}) senilai Rp ${totalAmount.toLocaleString('id-ID')} berhasil diajukan dan diteruskan ke Finance!`,
       );
 
       // Scroll to top
@@ -258,9 +265,10 @@ export const RequestPengadaanBarangView: React.FC = () => {
                   <optgroup label="Item Inventaris Gudang">
                     {inventory.map((item) => {
                       const isLow = item.stockAvailable <= item.minThreshold;
+                      const cleanName = item.name.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || item.code;
                       return (
                         <option key={item.id} value={item.code}>
-                          {item.name} [{item.code}] — Stok Ready: {item.stockAvailable} {item.unit} {isLow ? '⚠️ (STOK KRITIS)' : ''}
+                          {cleanName} [{item.code}] — Stok Ready: {item.stockAvailable} {item.unit} {isLow ? '⚠️ (STOK KRITIS)' : ''}
                         </option>
                       );
                     })}
@@ -278,7 +286,9 @@ export const RequestPengadaanBarangView: React.FC = () => {
                         <span className="font-mono font-bold text-slate-900 bg-emerald-100 px-2 py-0.5 rounded-md text-[11px]">
                           {selectedInventoryItem.code}
                         </span>
-                        <span className="font-bold text-slate-900">{selectedInventoryItem.name}</span>
+                        <span className="font-bold text-slate-900">
+                          {selectedInventoryItem.name.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || selectedInventoryItem.code}
+                        </span>
                       </div>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
@@ -326,7 +336,7 @@ export const RequestPengadaanBarangView: React.FC = () => {
                       type="text"
                       value={itemCode}
                       onChange={(e) => setItemCode(e.target.value.toUpperCase())}
-                      placeholder="Contoh: OTB-24-CORE"
+                      placeholder="Contoh: SFP-7DB, OTB-24-CORE"
                       className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 font-mono text-xs text-slate-900 focus:outline-hidden"
                     />
                   </div>
@@ -337,7 +347,7 @@ export const RequestPengadaanBarangView: React.FC = () => {
                       value={itemName}
                       onChange={(e) => setItemName(e.target.value)}
                       required
-                      placeholder="Nama lengkap barang pengadaan..."
+                      placeholder="Masukkan nama barang (misal: SFP 7dB 1.25G, Kabel FO 1 Core, dll)..."
                       className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 focus:outline-hidden"
                     />
                   </div>

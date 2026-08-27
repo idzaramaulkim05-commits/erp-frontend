@@ -58,7 +58,7 @@ export const NewProcurementModal: React.FC<NewProcurementModalProps> = ({ isOpen
     } else {
       setSelectedItemValue(SPECIAL_ITEM_VALUE);
       setItemCode('');
-      setItemName('Material Lainnya / Khusus');
+      setItemName('');
       setUnit('Unit');
       setUnitPrice(0);
     }
@@ -74,7 +74,7 @@ export const NewProcurementModal: React.FC<NewProcurementModalProps> = ({ isOpen
     setSelectedItemValue(value);
     if (value === SPECIAL_ITEM_VALUE) {
       setItemCode(itemCode || '');
-      setItemName(procurementRequest?.itemName ?? 'Material Lainnya / Khusus');
+      setItemName(procurementRequest?.itemName ?? '');
       return;
     }
 
@@ -89,10 +89,16 @@ export const NewProcurementModal: React.FC<NewProcurementModalProps> = ({ isOpen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const normalizedItemCode = (itemCode.trim() || deriveItemCode(itemName)).toUpperCase();
+    let cleanName = itemName.trim();
+    cleanName = cleanName.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim();
+    if (!cleanName) {
+      cleanName = itemCode.trim() || 'Perangkat Baru';
+    }
+
+    const normalizedItemCode = (itemCode.trim() || deriveItemCode(cleanName)).toUpperCase();
     const payload = {
       itemCode: normalizedItemCode,
-      itemName: itemName.trim(),
+      itemName: cleanName,
       quantity,
       unit: unit.trim(),
       unitPrice,
@@ -134,12 +140,15 @@ export const NewProcurementModal: React.FC<NewProcurementModalProps> = ({ isOpen
               onChange={(e) => handleItemSelect(e.target.value)}
               className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden"
             >
-              {inventory.map((item) => (
-                <option key={item.id} value={item.code}>
-                  {item.name} (Stok Sisa: {item.stockAvailable} {item.unit})
-                </option>
-              ))}
-              <option value={SPECIAL_ITEM_VALUE}>Material Lainnya / Khusus</option>
+              {inventory.map((item) => {
+                const cleanName = item.name.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || item.code;
+                return (
+                  <option key={item.id} value={item.code}>
+                    {cleanName} (Stok Sisa: {item.stockAvailable} {item.unit})
+                  </option>
+                );
+              })}
+              <option value={SPECIAL_ITEM_VALUE}>+ Material / Perangkat Lainnya (Input Manual)</option>
             </select>
           </div>
 

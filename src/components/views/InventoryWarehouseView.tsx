@@ -86,7 +86,9 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
               <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">
                 {request.id}
               </span>
-              <span className="text-sm font-bold text-slate-900">{request.itemName}</span>
+              <span className="text-sm font-bold text-slate-900">
+                {request.itemName.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || request.itemCode}
+              </span>
               <WorkspaceStatusPill label={request.status.toUpperCase()} tone={tone} />
             </div>
 
@@ -269,7 +271,9 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-slate-50/70">
                       <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900">{item.name}</div>
+                        <div className="font-bold text-slate-900">
+                          {item.name.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || item.code}
+                        </div>
                         <div className="font-mono text-[11px] text-slate-400">{item.code}</div>
                       </td>
                       <td className="px-4 py-3">
