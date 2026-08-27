@@ -306,7 +306,7 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
           subtitle="Warehouse mengelola pengadaan dari revisi, approval, ordered, sampai goods receipt pada satu tempat yang konsisten."
           badge={`${procurementRequests.length} pengajuan terlihat`}
         >
-          <div className="space-y-6">
+          <div className="space-y-6 p-5 sm:p-6">
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900">Menunggu Finance / Manajemen</h3>
