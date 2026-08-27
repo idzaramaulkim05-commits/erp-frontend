@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Inbox,
@@ -20,6 +21,7 @@ interface InventoryWarehouseViewProps {
 export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
   onOpenNewProcurement,
 }) => {
+  const navigate = useNavigate();
   const {
     inventory,
     procurementRequests,
@@ -231,8 +233,8 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
 
           <button
             type="button"
-            onClick={onOpenNewProcurement}
-            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+            onClick={() => navigate('/app/request-pengadaan-barang')}
+            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700 shadow-xs"
           >
             <PackagePlus className="h-4 w-4" />
             Buat Permintaan Barang Baru

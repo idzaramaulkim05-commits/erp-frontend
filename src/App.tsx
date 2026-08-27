@@ -40,6 +40,7 @@ import { ValidasiRegistrasiView } from './components/views/ValidasiRegistrasiVie
 import { SurveyInstalasiView } from './components/views/SurveyInstalasiView';
 import { RequestGudangInstalasiView } from './components/views/RequestGudangInstalasiView';
 import { AktivasiInstalasiView } from './components/views/AktivasiInstalasiView';
+import { RequestPengadaanBarangView } from './components/views/RequestPengadaanBarangView';
 
 // Modals
 import { NewTicketModal } from './components/modals/NewTicketModal';
@@ -214,6 +215,8 @@ const MainIOMSApp: React.FC = () => {
             onOpenNewProcurement={() => setIsProcurementModalOpen(true)}
           />
         );
+      case 'request_pengadaan_barang':
+        return <RequestPengadaanBarangView />;
       case 'kanban':
         return (
           <InterDivisionKanbanView
@@ -363,6 +366,7 @@ export default function App() {
             <Route path="/app/field-tech" element={<MainIOMSApp />} />
             <Route path="/app/finance" element={<MainIOMSApp />} />
             <Route path="/app/inventory" element={<MainIOMSApp />} />
+            <Route path="/app/request-pengadaan-barang" element={<MainIOMSApp />} />
             <Route path="/app/kanban" element={<MainIOMSApp />} />
             <Route path="/app/network-map" element={<MainIOMSApp />} />
             <Route path="/app/admin" element={<MainIOMSApp />} />
