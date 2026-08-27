@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Boxes,
   Camera,
   Check,
   CheckCircle2,
@@ -48,6 +49,32 @@ import { NotesActionModal } from '../modals/NotesActionModal';
 
 type FieldActionType = 'confirm' | 'start' | 'submit';
 type WizardStep = 1 | 2 | 3 | 4;
+
+const parseDeviceBrandAndModel = (item: { name?: string; brand?: string; model?: string }) => {
+  if (item.brand && item.model) {
+    return { brand: item.brand, model: item.model };
+  }
+  const name = item.name || '';
+  let brand = item.brand || '';
+  let model = item.model || '';
+
+  if (!brand) {
+    if (/zte/i.test(name)) brand = 'ZTE';
+    else if (/huawei/i.test(name)) brand = 'Huawei';
+    else if (/fiberhome/i.test(name)) brand = 'FiberHome';
+    else if (/mikrotik/i.test(name)) brand = 'MikroTik';
+    else if (/totolink/i.test(name)) brand = 'Totolink';
+    else if (/tp-link|tplink/i.test(name)) brand = 'TP-Link';
+    else brand = name.split(' ')[0] || 'ZTE';
+  }
+
+  if (!model) {
+    const cleaned = name.replace(new RegExp(brand, 'i'), '').replace(/\b(modem|ont|onu|router)\b/gi, '').trim();
+    model = cleaned || 'F609 V3';
+  }
+
+  return { brand, model };
+};
 
 const normalizeWhatsAppNumber = (phone?: string | null) => {
   const digits = (phone ?? '').replace(/\D/g, '');
@@ -133,7 +160,7 @@ const getSurveyInstallationFee = (workOrder: WorkOrder | null) => {
 
 export const PengerjaanInstalasiLapanganView: React.FC = () => {
   const { authFetch, user } = useAuth();
-  const { workOrders, refreshAll, isSyncing } = useIOMS();
+  const { workOrders, refreshAll, isSyncing, inventory } = useIOMS();
   const [items, setItems] = useState<WorkOrder[]>(workOrders);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -141,6 +168,7 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
   // Form State (Cleaned defaults without hardcoded pre-filled values)
   const [fieldActionType, setFieldActionType] = useState('tanpa_ganti_alat');
   const [deviceReplacementApplied, setDeviceReplacementApplied] = useState(false);
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string>('');
   const [deviceBrand, setDeviceBrand] = useState('');
   const [deviceModel, setDeviceModel] = useState('');
   const [macAddress, setMacAddress] = useState('');
@@ -274,15 +302,51 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
         actPayload.fieldActionType
           ?? selected.maintenancePayload?.fieldActionType
           ?? (selected.type === 'maintenance'
-            ? 'tanpa_ganti_alat'
+            ? (selected.maintenancePayload?.replacementFlowActive ? 'ganti_onu_router' : 'tanpa_ganti_alat')
             : selected.type === 'uninstallation'
             ? 'pencabutan_alat'
             : 'instalasi_baru'),
       ),
     );
-    setDeviceReplacementApplied(Boolean(actPayload.modemReplaced ?? selected.maintenancePayload?.deviceReplacementApplied));
-    setDeviceBrand(String(selected.maintenancePayload?.newDeviceIdentity?.brand ?? ''));
-    setDeviceModel(String(selected.maintenancePayload?.newDeviceIdentity?.model ?? ''));
+    const isReplacementActive = Boolean(
+      actPayload.modemReplaced
+      ?? selected.maintenancePayload?.deviceReplacementApplied
+      ?? selected.maintenancePayload?.replacementFlowActive
+    );
+    setDeviceReplacementApplied(isReplacementActive);
+
+    // Auto find device brand & model from required materials or inventory
+    const candidateMaterial = (selected.requiredMaterials ?? []).find((m) =>
+      /modem|ont|onu|zte|huawei|fiberhome|router/i.test(m.itemName)
+    ) || (selected.maintenancePayload?.replacementRequestedItems ?? []).find((m) =>
+      /modem|ont|onu|zte|huawei|fiberhome|router/i.test(m.itemName)
+    );
+
+    const matchedInv = candidateMaterial
+      ? inventory.find((inv) => inv.name.toLowerCase().includes(candidateMaterial.itemName.toLowerCase()) || candidateMaterial.itemName.toLowerCase().includes(inv.name.toLowerCase()))
+      : inventory.find((inv) => inv.category === 'ONT' || inv.name.toLowerCase().includes('modem') || inv.name.toLowerCase().includes('ont') || inv.name.toLowerCase().includes('onu'));
+
+    const existingBrand = String(selected.maintenancePayload?.newDeviceIdentity?.brand ?? '');
+    const existingModel = String(selected.maintenancePayload?.newDeviceIdentity?.model ?? '');
+
+    if (existingBrand && existingModel) {
+      setDeviceBrand(existingBrand);
+      setDeviceModel(existingModel);
+      if (matchedInv) setSelectedInventoryItemId(matchedInv.id);
+    } else if (matchedInv) {
+      const parsed = parseDeviceBrandAndModel(matchedInv);
+      setDeviceBrand(parsed.brand);
+      setDeviceModel(parsed.model);
+      setSelectedInventoryItemId(matchedInv.id);
+    } else if (candidateMaterial) {
+      const parsed = parseDeviceBrandAndModel({ name: candidateMaterial.itemName });
+      setDeviceBrand(parsed.brand);
+      setDeviceModel(parsed.model);
+    } else {
+      setDeviceBrand('');
+      setDeviceModel('');
+      setSelectedInventoryItemId('');
+    }
     setMacAddress(String(selected.routerSn ?? onuId.macAddress ?? onuId.serialNumber ?? ''));
     setPonSn(String(onuId.ponSn ?? ''));
     setRootCause(String(actPayload.rootCause ?? ''));
@@ -1158,8 +1222,30 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                         disabled={!isEditable}
                         checked={deviceReplacementApplied}
                         onChange={(e) => {
-                          setDeviceReplacementApplied(e.target.checked);
-                          setFieldActionType(e.target.checked ? 'ganti_onu_router' : 'tanpa_ganti_alat');
+                          const checked = e.target.checked;
+                          setDeviceReplacementApplied(checked);
+                          setFieldActionType(checked ? 'ganti_onu_router' : 'tanpa_ganti_alat');
+                          if (checked && (!deviceBrand || !deviceModel)) {
+                            const candidateMaterial = (selected.requiredMaterials ?? []).find((m) =>
+                              /modem|ont|onu|zte|huawei|fiberhome|router/i.test(m.itemName)
+                            ) || (selected.maintenancePayload?.replacementRequestedItems ?? []).find((m) =>
+                              /modem|ont|onu|zte|huawei|fiberhome|router/i.test(m.itemName)
+                            );
+                            const matchedInv = candidateMaterial
+                              ? inventory.find((inv) => inv.name.toLowerCase().includes(candidateMaterial.itemName.toLowerCase()) || candidateMaterial.itemName.toLowerCase().includes(inv.name.toLowerCase()))
+                              : inventory.find((inv) => inv.category === 'ONT' || inv.name.toLowerCase().includes('modem') || inv.name.toLowerCase().includes('ont') || inv.name.toLowerCase().includes('onu'));
+
+                            if (matchedInv) {
+                              const parsed = parseDeviceBrandAndModel(matchedInv);
+                              setDeviceBrand(parsed.brand);
+                              setDeviceModel(parsed.model);
+                              setSelectedInventoryItemId(matchedInv.id);
+                            } else if (candidateMaterial) {
+                              const parsed = parseDeviceBrandAndModel({ name: candidateMaterial.itemName });
+                              setDeviceBrand(parsed.brand);
+                              setDeviceModel(parsed.model);
+                            }
+                          }
                         }}
                         className="h-4 w-4 rounded border-slate-300 text-emerald-600 disabled:opacity-75"
                       />
@@ -1167,38 +1253,77 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     </label>
 
                     {deviceReplacementApplied && (
-                      <>
-                        <label className="space-y-1 text-xs font-semibold text-slate-700">
-                          <span>Brand Perangkat Baru</span>
-                          <input
-                            type="text"
-                            placeholder="ZTE / Huawei"
-                            disabled={!isEditable}
-                            value={deviceBrand}
-                            onChange={(e) => setDeviceBrand(e.target.value)}
-                            className={`h-10 w-full rounded-xl border px-3 text-xs outline-none ${
-                              !isEditable
-                                ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
-                                : 'border-slate-200 focus:border-emerald-400'
-                            }`}
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs font-semibold text-slate-700">
-                          <span>Model Perangkat Baru</span>
-                          <input
-                            type="text"
-                            placeholder="F609 V3"
-                            disabled={!isEditable}
-                            value={deviceModel}
-                            onChange={(e) => setDeviceModel(e.target.value)}
-                            className={`h-10 w-full rounded-xl border px-3 text-xs outline-none ${
-                              !isEditable
-                                ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
-                                : 'border-slate-200 focus:border-emerald-400'
-                            }`}
-                          />
-                        </label>
-                      </>
+                      <div className="sm:col-span-2 rounded-2xl bg-slate-50 border border-amber-200/80 p-4 space-y-3.5 shadow-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <Boxes className="h-4 w-4 text-amber-600" />
+                            Pilih Perangkat dari Inventori Gudang
+                          </label>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                            Auto-sync dari Stok Gudang
+                          </span>
+                        </div>
+
+                        <select
+                          disabled={!isEditable}
+                          value={selectedInventoryItemId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setSelectedInventoryItemId(id);
+                            const found = inventory.find((item) => item.id === id);
+                            if (found) {
+                              const parsed = parseDeviceBrandAndModel(found);
+                              setDeviceBrand(parsed.brand);
+                              setDeviceModel(parsed.model);
+                            }
+                          }}
+                          className={`h-11 w-full rounded-xl border px-3 text-xs font-semibold outline-none bg-white transition ${
+                            !isEditable
+                              ? 'border-slate-200 text-slate-700 cursor-not-allowed bg-slate-100'
+                              : 'border-slate-300 text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100'
+                          }`}
+                        >
+                          <option value="">-- Pilih Perangkat dari Inventori Gudang --</option>
+                          {inventory.map((inv) => (
+                            <option key={inv.id} value={inv.id}>
+                              {inv.name} (Kategori: {inv.category} • Stok: {inv.stockAvailable} {inv.unit})
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                          <label className="space-y-1 text-xs font-semibold text-slate-700">
+                            <span>Brand Perangkat Baru</span>
+                            <input
+                              type="text"
+                              placeholder="Auto dari inventori (misal: ZTE / Huawei)"
+                              disabled={!isEditable}
+                              value={deviceBrand}
+                              onChange={(e) => setDeviceBrand(e.target.value)}
+                              className={`h-10 w-full rounded-xl border px-3 text-xs outline-none bg-white ${
+                                !isEditable
+                                  ? 'bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed'
+                                  : 'border-slate-200 focus:border-emerald-400'
+                              }`}
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs font-semibold text-slate-700">
+                            <span>Model Perangkat Baru</span>
+                            <input
+                              type="text"
+                              placeholder="Auto dari inventori (misal: F609 V3)"
+                              disabled={!isEditable}
+                              value={deviceModel}
+                              onChange={(e) => setDeviceModel(e.target.value)}
+                              className={`h-10 w-full rounded-xl border px-3 text-xs outline-none bg-white ${
+                                !isEditable
+                                  ? 'bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed'
+                                  : 'border-slate-200 focus:border-emerald-400'
+                              }`}
+                            />
+                          </label>
+                        </div>
+                      </div>
                     )}
 
                     <label className="space-y-1 text-xs font-semibold text-slate-700 sm:col-span-2">
