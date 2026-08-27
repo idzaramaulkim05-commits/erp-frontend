@@ -273,6 +273,7 @@ export interface Customer {
   pppoeUsername: string; // e.g. "cust1042@isp.net"
   pppoePassword: string; // Randomized secure password
   ipAddress: string; // e.g. "10.20.14.88"
+  macAddress?: string;
   ontBrand: 'ZTE' | 'Huawei' | 'FiberHome';
   ontModel: string; // "ZTE F609", "Huawei HG8245H5", "ZTE F670L"
   ontSerialNumber: string; // e.g. "ZTEGCA48B21F"

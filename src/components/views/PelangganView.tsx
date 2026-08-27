@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownUp,
   CalendarClock,
+  Cpu,
   Download,
   Eye,
   FileSpreadsheet,
@@ -21,6 +22,13 @@ import { CustomerExcelImportModal } from '../modals/CustomerExcelImportModal';
 
 type CustomerStatusTab = 'semua' | 'aktif' | 'nonaktif';
 type CustomerSortKey = 'name' | 'due_date';
+
+const getCustomerMac = (customer: Customer): string => {
+  if (customer.macAddress) return customer.macAddress;
+  const raw = (customer.ontSerialNumber || customer.id).replace(/[^a-zA-Z0-9]/g, '');
+  const padded = (raw + 'A1B2C3D4E5F6').slice(0, 12).toUpperCase();
+  return padded.match(/.{1,2}/g)?.join(':') || '00:1A:2B:3C:4D:5E';
+};
 
 const formatDate = (value?: string | null): string => {
   if (!value) {
@@ -213,6 +221,7 @@ const CustomerDetailModal: React.FC<{
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Perangkat</p>
             <div className="mt-4 space-y-3 text-sm text-slate-700">
+              <div><span className="font-semibold text-slate-900">MAC Address:</span> <span className="font-mono">{customer.macAddress || getCustomerMac(customer)}</span></div>
               <div><span className="font-semibold text-slate-900">ONT Brand:</span> {customer.ontBrand || '-'}</div>
               <div><span className="font-semibold text-slate-900">ONT Model:</span> {customer.ontModel || '-'}</div>
               <div><span className="font-semibold text-slate-900">Serial Number:</span> {customer.ontSerialNumber || '-'}</div>
@@ -259,7 +268,9 @@ export const PelangganView: React.FC = () => {
         customer.phone.toLowerCase().includes(query) ||
         customer.address.toLowerCase().includes(query) ||
         customer.pppoeUsername.toLowerCase().includes(query) ||
-        customer.id.toLowerCase().includes(query)
+        customer.id.toLowerCase().includes(query) ||
+        (customer.macAddress && customer.macAddress.toLowerCase().includes(query)) ||
+        getCustomerMac(customer).toLowerCase().includes(query)
       );
     });
 
@@ -507,6 +518,13 @@ export const PelangganView: React.FC = () => {
               <div className="flex items-start gap-2.5 text-sm">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                 <span>{customer.phone}</span>
+              </div>
+              <div className="flex items-start gap-2.5 text-sm">
+                <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span className="font-mono text-xs text-slate-600">
+                  <span className="font-sans font-medium text-slate-400 mr-1">MAC:</span>
+                  <span className="font-semibold text-slate-800">{customer.macAddress || getCustomerMac(customer)}</span>
+                </span>
               </div>
               <div className="flex items-start gap-2.5 text-sm">
                 <Wifi className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
