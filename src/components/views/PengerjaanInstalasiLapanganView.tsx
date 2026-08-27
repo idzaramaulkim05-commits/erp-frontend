@@ -202,6 +202,8 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
   const [scannedMacCandidate, setScannedMacCandidate] = useState('');
   const [macPhotoPreview, setMacPhotoPreview] = useState<string | null>(null);
   const [isScanningMac, setIsScanningMac] = useState(false);
+  const macCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const macGalleryInputRef = useRef<HTMLInputElement | null>(null);
   const macFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const formatMacAddress = (value: string): string => {
@@ -1343,14 +1345,24 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                               Foto & Scan Label MAC Address Router Baru
                             </span>
                             {isEditable && (
-                              <button
-                                type="button"
-                                onClick={() => macFileInputRef.current?.click()}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs cursor-pointer"
-                              >
-                                <Camera className="h-3.5 w-3.5 text-emerald-600" />
-                                <span>Foto / Scan Label MAC Baru</span>
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => macCameraInputRef.current?.click()}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-2xs cursor-pointer"
+                                >
+                                  <Camera className="h-3.5 w-3.5" />
+                                  <span>Foto Kamera</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => macGalleryInputRef.current?.click()}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+                                >
+                                  <Upload className="h-3.5 w-3.5 text-slate-600" />
+                                  <span>Upload Foto</span>
+                                </button>
+                              </div>
                             )}
                           </div>
 
@@ -1403,12 +1415,24 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                                   </div>
                                 </div>
                               ) : (
-                                <div
-                                  onClick={() => isEditable && macFileInputRef.current?.click()}
-                                  className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100/80 cursor-pointer text-xs text-slate-500 font-semibold transition"
-                                >
-                                  <Camera className="h-4 w-4 text-slate-400" />
-                                  <span>Klik untuk ambil foto label router</span>
+                                <div className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-600">
+                                  <button
+                                    type="button"
+                                    onClick={() => isEditable && macCameraInputRef.current?.click()}
+                                    className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline cursor-pointer"
+                                  >
+                                    <Camera className="h-3.5 w-3.5" />
+                                    <span>Ambil Foto</span>
+                                  </button>
+                                  <span className="text-slate-300">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => isEditable && macGalleryInputRef.current?.click()}
+                                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:underline cursor-pointer"
+                                  >
+                                    <Upload className="h-3.5 w-3.5" />
+                                    <span>Upload Galeri</span>
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -1520,27 +1544,30 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
 
                   {(selected.type === 'installation' || deviceReplacementApplied) && (
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
                         <span className="text-xs font-semibold text-slate-700">
                           {deviceReplacementApplied ? 'MAC Address Router Pengganti' : 'MAC Address Router'}
                         </span>
                         {isEditable && (
-                          <button
-                            type="button"
-                            onClick={() => macFileInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs cursor-pointer"
-                          >
-                            <Camera className="h-3.5 w-3.5 text-emerald-600" />
-                            <span>Foto / Scan Label MAC</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => macCameraInputRef.current?.click()}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-500 transition shadow-2xs cursor-pointer"
+                            >
+                              <Camera className="h-3.5 w-3.5" />
+                              <span>Foto Kamera</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => macGalleryInputRef.current?.click()}
+                              className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-300 px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+                            >
+                              <Upload className="h-3.5 w-3.5 text-slate-600" />
+                              <span>Upload File</span>
+                            </button>
+                          </div>
                         )}
-                        <input
-                          ref={macFileInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleMacPhotoSelected(e.target.files?.[0] ?? null)}
-                        />
                       </div>
 
                       <input
@@ -2102,7 +2129,7 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     setRouterSn(scannedMacCandidate);
                     setIsMacConfirmModalOpen(false);
                   }}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 transition"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 transition cursor-pointer"
                 >
                   <Check className="h-4 w-4" />
                   <span>Ya, Gunakan MAC Address Ini</span>
@@ -2116,7 +2143,7 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                       setRouterSn(scannedMacCandidate);
                       setIsMacConfirmModalOpen(false);
                     }}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                   >
                     <span>Koreksi Manual</span>
                   </button>
@@ -2127,9 +2154,35 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                       setIsMacConfirmModalOpen(false);
                       setIsMacWarningModalOpen(true);
                     }}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition cursor-pointer"
                   >
                     <span>Tidak Terbaca</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMacConfirmModalOpen(false);
+                      macCameraInputRef.current?.click();
+                    }}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Foto Ulang (Kamera)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMacConfirmModalOpen(false);
+                      macGalleryInputRef.current?.click();
+                    }}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5 text-slate-600" />
+                    <span>Upload File</span>
                   </button>
                 </div>
               </div>
@@ -2148,20 +2201,69 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
               </div>
               <h3 className="text-sm font-bold text-slate-900">SN / MAC Tidak Terbaca</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                MAC Address tidak terbaca secara otomatis dari foto. Silakan inputkan secara manual pada form dan pastikan benar.
+                MAC Address tidak terbaca secara otomatis dari foto. Anda dapat mengambil foto ulang via kamera, mengupload file baru, atau menginputkan secara manual.
               </p>
 
-              <button
-                type="button"
-                onClick={() => setIsMacWarningModalOpen(false)}
-                className="w-full mt-2 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition"
-              >
-                Mengerti, Input Manual
-              </button>
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMacWarningModalOpen(false);
+                    macCameraInputRef.current?.click();
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 transition cursor-pointer"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Ambil Foto Ulang (Kamera)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMacWarningModalOpen(false);
+                    macGalleryInputRef.current?.click();
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Pilih dari Galeri / File</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMacWarningModalOpen(false)}
+                  className="w-full inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Input Manual Saja
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Hidden File Inputs for MAC Camera vs Gallery */}
+      <input
+        ref={macCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          handleMacPhotoSelected(e.target.files?.[0] ?? null);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={macGalleryInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          handleMacPhotoSelected(e.target.files?.[0] ?? null);
+          e.target.value = '';
+        }}
+      />
 
       {/* Berita Acara Full Document Viewer Modal */}
       <BeritaAcaraModal
