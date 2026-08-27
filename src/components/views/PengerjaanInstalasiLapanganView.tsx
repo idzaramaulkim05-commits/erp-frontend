@@ -401,6 +401,17 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
     }));
   }, [deviceReplacementApplied, selected]);
 
+  const replacementMaterials = useMemo(() => {
+    if (!selected) return [];
+    if (selected.requiredMaterials && selected.requiredMaterials.length > 0) {
+      return selected.requiredMaterials;
+    }
+    if (selected.maintenancePayload?.replacementRequestedItems && selected.maintenancePayload.replacementRequestedItems.length > 0) {
+      return selected.maintenancePayload.replacementRequestedItems;
+    }
+    return [];
+  }, [selected]);
+
   const isStep3Complete = useMemo(() => {
     if (!selected) return false;
     if (selected.type === 'installation') {
@@ -411,15 +422,9 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
         && installationPaymentCustomerPaid
       );
     }
-    if (selected.type === 'maintenance' && deviceReplacementApplied) {
-      return Boolean(deviceBrand.trim() && deviceModel.trim());
-    }
     return true;
   }, [
     customerBiodataConfirmed,
-    deviceBrand,
-    deviceModel,
-    deviceReplacementApplied,
     installationFeeActual,
     installationPaymentCustomerPaid,
     installationPaymentMethod,
@@ -1225,27 +1230,6 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                           const checked = e.target.checked;
                           setDeviceReplacementApplied(checked);
                           setFieldActionType(checked ? 'ganti_onu_router' : 'tanpa_ganti_alat');
-                          if (checked && (!deviceBrand || !deviceModel)) {
-                            const candidateMaterial = (selected.requiredMaterials ?? []).find((m) =>
-                              /modem|ont|onu|zte|huawei|fiberhome|router/i.test(m.itemName)
-                            ) || (selected.maintenancePayload?.replacementRequestedItems ?? []).find((m) =>
-                              /modem|ont|onu|zte|huawei|fiberhome|router/i.test(m.itemName)
-                            );
-                            const matchedInv = candidateMaterial
-                              ? inventory.find((inv) => inv.name.toLowerCase().includes(candidateMaterial.itemName.toLowerCase()) || candidateMaterial.itemName.toLowerCase().includes(inv.name.toLowerCase()))
-                              : inventory.find((inv) => inv.category === 'ONT' || inv.name.toLowerCase().includes('modem') || inv.name.toLowerCase().includes('ont') || inv.name.toLowerCase().includes('onu'));
-
-                            if (matchedInv) {
-                              const parsed = parseDeviceBrandAndModel(matchedInv);
-                              setDeviceBrand(parsed.brand);
-                              setDeviceModel(parsed.model);
-                              setSelectedInventoryItemId(matchedInv.id);
-                            } else if (candidateMaterial) {
-                              const parsed = parseDeviceBrandAndModel({ name: candidateMaterial.itemName });
-                              setDeviceBrand(parsed.brand);
-                              setDeviceModel(parsed.model);
-                            }
-                          }
                         }}
                         className="h-4 w-4 rounded border-slate-300 text-emerald-600 disabled:opacity-75"
                       />
@@ -1253,75 +1237,73 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     </label>
 
                     {deviceReplacementApplied && (
-                      <div className="sm:col-span-2 rounded-2xl bg-slate-50 border border-amber-200/80 p-4 space-y-3.5 shadow-xs">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                            <Boxes className="h-4 w-4 text-amber-600" />
-                            Pilih Perangkat dari Inventori Gudang
-                          </label>
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                            Auto-sync dari Stok Gudang
+                      <div className="sm:col-span-2 rounded-2xl bg-amber-50/80 border border-amber-200 p-4 space-y-3 shadow-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <Boxes className="h-4 w-4 text-amber-700 shrink-0" />
+                            <span className="text-xs font-bold text-slate-900">
+                              Informasi Perangkat Pengganti
+                            </span>
+                          </div>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="h-3 w-3" /> Dikonfirmasi Gudang
                           </span>
                         </div>
 
-                        <select
-                          disabled={!isEditable}
-                          value={selectedInventoryItemId}
-                          onChange={(e) => {
-                            const id = e.target.value;
-                            setSelectedInventoryItemId(id);
-                            const found = inventory.find((item) => item.id === id);
-                            if (found) {
-                              const parsed = parseDeviceBrandAndModel(found);
-                              setDeviceBrand(parsed.brand);
-                              setDeviceModel(parsed.model);
-                            }
-                          }}
-                          className={`h-11 w-full rounded-xl border px-3 text-xs font-semibold outline-none bg-white transition ${
-                            !isEditable
-                              ? 'border-slate-200 text-slate-700 cursor-not-allowed bg-slate-100'
-                              : 'border-slate-300 text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100'
-                          }`}
-                        >
-                          <option value="">-- Pilih Perangkat dari Inventori Gudang --</option>
-                          {inventory.map((inv) => (
-                            <option key={inv.id} value={inv.id}>
-                              {inv.name} (Kategori: {inv.category} • Stok: {inv.stockAvailable} {inv.unit})
-                            </option>
-                          ))}
-                        </select>
+                        {replacementMaterials.length > 0 ? (
+                          <div className="space-y-2">
+                            {replacementMaterials.map((mat, idx) => {
+                              const matchedInv = inventory.find(
+                                (inv) => inv.name.toLowerCase() === mat.itemName.toLowerCase() || mat.itemName.toLowerCase().includes(inv.name.toLowerCase())
+                              );
+                              const parsed = matchedInv
+                                ? parseDeviceBrandAndModel(matchedInv)
+                                : parseDeviceBrandAndModel({ name: mat.itemName });
 
-                        <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                          <label className="space-y-1 text-xs font-semibold text-slate-700">
-                            <span>Brand Perangkat Baru</span>
-                            <input
-                              type="text"
-                              placeholder="Auto dari inventori (misal: ZTE / Huawei)"
-                              disabled={!isEditable}
-                              value={deviceBrand}
-                              onChange={(e) => setDeviceBrand(e.target.value)}
-                              className={`h-10 w-full rounded-xl border px-3 text-xs outline-none bg-white ${
-                                !isEditable
-                                  ? 'bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed'
-                                  : 'border-slate-200 focus:border-emerald-400'
-                              }`}
-                            />
-                          </label>
-                          <label className="space-y-1 text-xs font-semibold text-slate-700">
-                            <span>Model Perangkat Baru</span>
-                            <input
-                              type="text"
-                              placeholder="Auto dari inventori (misal: F609 V3)"
-                              disabled={!isEditable}
-                              value={deviceModel}
-                              onChange={(e) => setDeviceModel(e.target.value)}
-                              className={`h-10 w-full rounded-xl border px-3 text-xs outline-none bg-white ${
-                                !isEditable
-                                  ? 'bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed'
-                                  : 'border-slate-200 focus:border-emerald-400'
-                              }`}
-                            />
-                          </label>
+                              return (
+                                <div key={idx} className="rounded-xl border border-amber-200/90 bg-white p-3 space-y-2 shadow-2xs">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-black text-slate-900">{mat.itemName}</span>
+                                      <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                                        Siap Dipasang
+                                      </span>
+                                    </div>
+                                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                      {mat.quantity} {mat.unit}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3 text-xs border-t border-slate-100 pt-2">
+                                    <div>
+                                      <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Brand Perangkat:</span>
+                                      <span className="font-bold text-slate-800 text-xs">{parsed.brand || 'ZTE'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Model Perangkat:</span>
+                                      <span className="font-bold text-slate-800 text-xs">{parsed.model || mat.itemName}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-amber-200/90 bg-white p-3 text-xs">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Brand Perangkat:</span>
+                                <span className="font-bold text-slate-800">{deviceBrand || 'ZTE'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Model Perangkat:</span>
+                                <span className="font-bold text-slate-800">{deviceModel || 'F609 V3'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="text-[11px] text-amber-900/90 bg-amber-100/60 rounded-xl p-2.5 border border-amber-200/60 leading-relaxed">
+                          📌 <strong>Catatan:</strong> Perangkat di atas telah diinputkan oleh <strong>NOC</strong> saat eskalasi tiket dan telah <strong>dikonfirmasi tersedia oleh Gudang</strong>. Teknisi tinggal membawa dan memasang perangkat tersebut di lokasi.
                         </div>
                       </div>
                     )}
