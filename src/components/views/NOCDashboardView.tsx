@@ -8,7 +8,6 @@ import {
   Cpu,
   Layers,
   Network,
-  Radio,
   Send,
   Server,
   ShieldAlert,
@@ -18,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
 import { Customer, NetworkODP, TroubleTicket, WorkOrder } from '../../types';
-import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
+import { WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
 import { NotesActionModal } from '../modals/NotesActionModal';
 
 interface NOCDashboardViewProps {
@@ -52,11 +51,6 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
     [tickets],
   );
 
-  const escalatedCount = useMemo(
-    () => tickets.filter((ticket) => ticket.status === 'assigned_to_lead' || ticket.status === 'field_progress').length,
-    [tickets],
-  );
-
   const pendingPppoeWorkOrders = useMemo(
     () => workOrders.filter((item) => item.type === 'installation' && item.pppoeRequestStatus === 'pending_noc'),
     [workOrders],
@@ -69,11 +63,6 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
 
   const lowSignalCustomers = useMemo(
     () => customers.filter((customer) => (customer.opticalPowerDbm || 0) < -25),
-    [customers],
-  );
-
-  const activeCustomersCount = useMemo(
-    () => customers.filter((customer) => customer.status === 'active').length,
     [customers],
   );
 
@@ -181,51 +170,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
 
   return (
     <div className="space-y-6">
-      {/* 1. Real-time Operations Hero */}
-      <WorkspaceOpsHero
-        eyebrow="Network Operations Center"
-        title="Monitoring Jaringan, Kredensial PPPoE, QC & Triage Gangguan"
-        subtitle="Dashboard sentral NOC dengan data real-time: antrean tiket gangguan, aktivasi PPPoE, verifikasi QC teknisi, dan kualitas redaman pelanggan."
-        stats={[
-          {
-            label: 'Review Gangguan',
-            value: `${pendingNocTickets.length} Tiket`,
-            description: `${escalatedCount} tiket lainnya sedang ditangani teknisi lapangan.`,
-            icon: ShieldCheck,
-            accentClass: 'bg-amber-400/15 text-amber-200',
-          },
-          {
-            label: 'Request PPPoE',
-            value: `${pendingPppoeWorkOrders.length} WO`,
-            description: 'Permintaan akun PPPoE pasang baru dari teknisi lapangan.',
-            icon: Wifi,
-            accentClass: 'bg-sky-400/15 text-sky-200',
-          },
-          {
-            label: 'QC Verifikasi',
-            value: `${pendingQcWorkOrders.length} WO`,
-            description: 'Pemasangan/perbaikan selesai menunggu konfirmasi QC NOC.',
-            icon: CheckCircle2,
-            accentClass: 'bg-violet-400/15 text-violet-200',
-          },
-          {
-            label: 'Sinyal Kritis',
-            value: `${lowSignalCustomers.length} Pelanggan`,
-            description: 'Pelanggan dengan redaman optik di bawah -25 dBm.',
-            icon: Activity,
-            accentClass: 'bg-rose-400/15 text-rose-200',
-          },
-          {
-            label: 'Pelanggan Aktif',
-            value: `${activeCustomersCount} Sesi`,
-            description: 'Total pelanggan berstatus aktif di seluruh jaringan.',
-            icon: Radio,
-            accentClass: 'bg-emerald-400/15 text-emerald-200',
-          },
-        ]}
-      />
-
-      {/* 2. Quick Action Modules Banners */}
+      {/* Quick Action Modules Banners */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Request PPPoE Card */}
         <div className="flex flex-col justify-between rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs">
