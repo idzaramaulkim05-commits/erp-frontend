@@ -160,7 +160,7 @@ const getSurveyInstallationFee = (workOrder: WorkOrder | null) => {
 
 export const PengerjaanInstalasiLapanganView: React.FC = () => {
   const { authFetch, user } = useAuth();
-  const { workOrders, refreshAll, isSyncing, inventory } = useIOMS();
+  const { workOrders, customers, refreshAll, isSyncing, inventory } = useIOMS();
   const [items, setItems] = useState<WorkOrder[]>(workOrders);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -412,6 +412,30 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
     return [];
   }, [selected]);
 
+  const selectedCustomer = useMemo(() => {
+    if (!selected) return null;
+    if (selected.customerId) {
+      return customers.find((c) => c.id === selected.customerId) ?? null;
+    }
+    return customers.find((c) => c.name.toLowerCase() === selected.customerName.toLowerCase()) ?? null;
+  }, [customers, selected]);
+
+  const oldRouterMac = useMemo(() => {
+    if (selectedCustomer?.macAddress) return selectedCustomer.macAddress;
+    if (selectedCustomer?.ontSerialNumber) return selectedCustomer.ontSerialNumber;
+    const oldSnap = selected?.maintenancePayload?.oldDeviceSnapshot;
+    if (oldSnap?.ontSerialNumber) return String(oldSnap.ontSerialNumber);
+    return '00:1A:2B:3C:4D:5E';
+  }, [selectedCustomer, selected]);
+
+  const oldRouterBrand = useMemo(() => {
+    return selectedCustomer?.ontBrand || selected?.maintenancePayload?.oldDeviceSnapshot?.ontBrand || 'ZTE';
+  }, [selectedCustomer, selected]);
+
+  const oldRouterModel = useMemo(() => {
+    return selectedCustomer?.ontModel || selected?.maintenancePayload?.oldDeviceSnapshot?.ontModel || 'F609';
+  }, [selectedCustomer, selected]);
+
   const isStep3Complete = useMemo(() => {
     if (!selected) return false;
     if (selected.type === 'installation') {
@@ -447,14 +471,23 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
       );
     }
 
+    if (selected.type === 'maintenance') {
+      return Boolean(
+        opticalPower.trim() !== ''
+        && actionNotes.trim() !== ''
+        && isStep3Complete
+        && (!deviceReplacementApplied || (macAddress.trim() !== '' || routerSn.trim() !== ''))
+      );
+    }
+
     return Boolean(
-      opticalPower.trim() !== ''
-      && actionNotes.trim() !== ''
+      actionNotes.trim() !== ''
       && isStep3Complete
     );
   }, [
     actionNotes,
     activationTermsAccepted,
+    deviceReplacementApplied,
     installationPhotoFile,
     installationPhotoUrl,
     isStep3Complete,
@@ -1302,6 +1335,86 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Scan & Photo MAC Address of New Replacement Router */}
+                        <div className="rounded-xl border border-amber-200/90 bg-white p-3.5 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <QrCode className="h-4 w-4 text-emerald-600" />
+                              Foto & Scan Label MAC Address Router Baru
+                            </span>
+                            {isEditable && (
+                              <button
+                                type="button"
+                                onClick={() => macFileInputRef.current?.click()}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs cursor-pointer"
+                              >
+                                <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>Foto / Scan Label MAC Baru</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                MAC Address Router Baru
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="01:32:54:76:85:AB"
+                                disabled={!isEditable}
+                                value={macAddress || routerSn}
+                                onChange={(e) => {
+                                  const formatted = formatMacAddress(e.target.value);
+                                  setMacAddress(formatted);
+                                  setRouterSn(formatted);
+                                }}
+                                className={`h-10 w-full rounded-xl border px-3 text-xs outline-none uppercase font-mono font-bold ${
+                                  !isEditable
+                                    ? 'bg-slate-50 border-slate-200 text-slate-700 cursor-not-allowed'
+                                    : 'border-slate-200 focus:border-emerald-400'
+                                }`}
+                              />
+                              <span className="text-[10px] text-slate-400 block">
+                                Format: 6 blok heksadesimal (OUI : NIC)
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                                Bukti Foto Label Fisik
+                              </span>
+                              {photoOnuFile || macPhotoPreview ? (
+                                <div className="flex items-center gap-3 p-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                                  {macPhotoPreview && (
+                                    <img
+                                      src={macPhotoPreview}
+                                      alt="Label MAC Baru"
+                                      className="h-10 w-10 object-cover rounded-lg border border-emerald-300"
+                                    />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-xs font-bold text-emerald-900 block truncate">
+                                      {photoOnuFile ? photoOnuFile.name : 'Foto Label Terlampir'}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-700 flex items-center gap-1 font-semibold">
+                                      <CheckCircle2 className="h-3 w-3" /> Bukti foto fisik siap dikirim
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  onClick={() => isEditable && macFileInputRef.current?.click()}
+                                  className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100/80 cursor-pointer text-xs text-slate-500 font-semibold transition"
+                                >
+                                  <Camera className="h-4 w-4 text-slate-400" />
+                                  <span>Klik untuk ambil foto label router</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="text-[11px] text-amber-900/90 bg-amber-100/60 rounded-xl p-2.5 border border-amber-200/60 leading-relaxed">
                           📌 <strong>Catatan:</strong> Perangkat di atas telah diinputkan oleh <strong>NOC</strong> saat eskalasi tiket dan telah <strong>dikonfirmasi tersedia oleh Gudang</strong>. Teknisi tinggal membawa dan memasang perangkat tersebut di lokasi.
                         </div>
@@ -1405,15 +1518,17 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
                     <span className="text-[10px] text-slate-400">Standar: -18 s/d -23 dBm</span>
                   </label>
 
-                  {selected.type === 'installation' && (
+                  {(selected.type === 'installation' || deviceReplacementApplied) && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-700">MAC Address Router</span>
+                        <span className="text-xs font-semibold text-slate-700">
+                          {deviceReplacementApplied ? 'MAC Address Router Pengganti' : 'MAC Address Router'}
+                        </span>
                         {isEditable && (
                           <button
                             type="button"
                             onClick={() => macFileInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs cursor-pointer"
                           >
                             <Camera className="h-3.5 w-3.5 text-emerald-600" />
                             <span>Foto / Scan Label MAC</span>
@@ -1713,33 +1828,19 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
         onCancel={() => setPppoeModalOpen(false)}
       />
 
-      {/* Action Confirmation Modal */}
+      {/* Action Confirmation Modal for Confirm and Start */}
       <ConfirmActionModal
-        open={pendingAction !== null}
-        title={
-          pendingAction === 'confirm'
-            ? 'Konfirmasi Terima WO'
-            : pendingAction === 'start'
-            ? 'Konfirmasi Mulai Kerja'
-            : 'Konfirmasi Submit ke QC NOC'
-        }
+        open={pendingAction === 'confirm' || pendingAction === 'start'}
+        title={pendingAction === 'confirm' ? 'Konfirmasi Terima WO' : 'Konfirmasi Mulai Kerja'}
         message={
           selected
             ? pendingAction === 'confirm'
               ? `WO ${selected.id} untuk ${selected.customerName} akan Anda terima sebagai tugas aktif.`
-              : pendingAction === 'start'
-              ? `WO ${selected.id} untuk ${selected.customerName} akan mulai dikerjakan sekarang.`
-              : `Hasil pekerjaan ${selected.id} (${selected.customerName}) akan dikirimkan ke QC NOC untuk verifikasi akhir.`
+              : `WO ${selected.id} untuk ${selected.customerName} akan mulai dikerjakan sekarang.`
             : ''
         }
-        confirmLabel={
-          pendingAction === 'confirm'
-            ? 'Ya, Terima WO'
-            : pendingAction === 'start'
-            ? 'Ya, Mulai Kerja'
-            : 'Ya, Submit ke QC NOC'
-        }
-        tone={pendingAction === 'submit' ? 'success' : 'warning'}
+        confirmLabel={pendingAction === 'confirm' ? 'Ya, Terima WO' : 'Ya, Mulai Kerja'}
+        tone="warning"
         loading={saving}
         onCancel={() => setPendingAction(null)}
         onConfirm={() => {
@@ -1749,13 +1850,204 @@ export const PengerjaanInstalasiLapanganView: React.FC = () => {
           }
           if (pendingAction === 'start') {
             void startInstallation().finally(() => setPendingAction(null));
-            return;
-          }
-          if (pendingAction === 'submit') {
-            void submitInstallation().finally(() => setPendingAction(null));
           }
         }}
       />
+
+      {/* Comprehensive QC NOC Confirmation Modal with Router Old vs New Matching */}
+      {pendingAction === 'submit' && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-6">
+            {/* Modal Header */}
+            <div className="border-b border-slate-100 bg-slate-900 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold">Konfirmasi Pengiriman ke NOC QC</h3>
+                  <p className="text-xs text-slate-400">
+                    Verifikasi kecocokan data pelanggan, router lama, dan router baru
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              {/* Customer & Work Order Summary */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Pelanggan</span>
+                    <span className="text-sm font-black text-slate-900">{selected.customerName}</span>
+                  </div>
+                  <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-bold text-white font-mono">
+                    {selected.id}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600 pt-2 border-t border-slate-200/60">
+                  <div><span className="text-slate-400 font-medium">Alamat:</span> {selected.address} ({selected.region})</div>
+                  <div><span className="text-slate-400 font-medium">Paket:</span> <strong className="text-slate-800">{selected.packagePlan || 'Internet Fiber'}</strong></div>
+                </div>
+              </div>
+
+              {/* Comparison: Router Lama vs Router Baru (If device replacement applied) */}
+              {deviceReplacementApplied ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Boxes className="h-4 w-4 text-amber-600" />
+                      Verifikasi Kesesuaian Router Lama vs Baru
+                    </span>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                      Ganti Perangkat ONT
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {/* Router Lama Card */}
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-4 space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-rose-200/70 pb-1.5">
+                        <span className="text-xs font-bold text-rose-950 flex items-center gap-1">
+                          <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                          Router Lama (Ditarik/Retur)
+                        </span>
+                        <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[9px] font-bold text-rose-800 border border-rose-200">
+                          Eksisting
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-semibold block">Brand / Model:</span>
+                          <strong className="text-slate-800 text-xs">{oldRouterBrand} - {oldRouterModel}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-semibold block">MAC Address / SN Lama:</span>
+                          <span className="font-mono font-bold text-rose-900 bg-rose-100/80 px-2 py-0.5 rounded border border-rose-200 block truncate text-xs">
+                            {oldRouterMac}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Router Baru Card */}
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-emerald-200/70 pb-1.5">
+                        <span className="text-xs font-bold text-emerald-950 flex items-center gap-1">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          Router Baru (Dipasang)
+                        </span>
+                        <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-800 border border-emerald-200">
+                          Pengganti
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-semibold block">Brand / Model:</span>
+                          <strong className="text-slate-800 text-xs">{deviceBrand || 'ZTE'} - {deviceModel || 'F609 V3'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-semibold block">MAC Address Baru:</span>
+                          <span className="font-mono font-bold text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 block truncate text-xs">
+                            {macAddress || routerSn || '01:32:54:73:16:85'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Photo verification badge if uploaded */}
+                  {(photoOnuFile || macPhotoPreview) && (
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      {macPhotoPreview && (
+                        <img
+                          src={macPhotoPreview}
+                          alt="Bukti Label MAC"
+                          className="h-11 w-11 object-cover rounded-lg border border-slate-300"
+                        />
+                      )}
+                      <div>
+                        <span className="font-bold text-slate-800 block">Bukti Foto Fisik Label Terlampir</span>
+                        <span className="text-slate-500 text-[11px]">Foto MAC barcode perangkat baru berhasil di-attach ({photoOnuFile?.name || 'Foto label'}).</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : selected.type === 'installation' ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-2">
+                  <span className="text-xs font-bold text-emerald-950 block">Identitas Router Pasang Baru</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">MAC Address / SN:</span>
+                      <span className="font-mono font-bold text-emerald-900 text-xs">{macAddress || routerSn || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Biaya Pasang:</span>
+                      <strong className="text-slate-800">Rp {Number(installationFeeActual || 0).toLocaleString('id-ID')} ({installationPaymentMethod})</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Technical Measurements */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Redaman OPM</span>
+                  <span className="font-mono font-bold text-sm text-slate-900">{opticalPower || '-20.0'} dBm</span>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Tindakan Lapangan</span>
+                  <span className="font-bold text-slate-800 truncate block">
+                    {fieldActionType === 'ganti_onu_router' ? 'Ganti ONU / Router' : actionNotes || 'Penanganan selesai'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Confirmation Prompt */}
+              <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-950 text-center font-bold">
+                ⚠️ Pastikan data dan MAC Address router baru serta router lama di atas sudah cocok & benar sebelum diverifikasi oleh tim NOC QC.
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setPendingAction(null)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Periksa Kembali
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  void submitInstallation().finally(() => setPendingAction(null));
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-2.5 text-xs font-bold text-white hover:bg-slate-800 shadow-xs transition cursor-pointer"
+              >
+                {saving ? (
+                  <span>Mengirim ke QC...</span>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 text-emerald-400" />
+                    <span>Ya, Kirim ke NOC QC</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAC Address Detected Confirmation Modal */}
       {isMacConfirmModalOpen && (
