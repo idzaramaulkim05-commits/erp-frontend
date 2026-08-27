@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  Eye,
   Inbox,
   Package,
   PackagePlus,
@@ -12,6 +13,7 @@ import { ProcurementRequest } from '../../types';
 import { ConfirmActionModal } from '../modals/ConfirmActionModal';
 import { NewProcurementModal } from '../modals/NewProcurementModal';
 import { NotesActionModal } from '../modals/NotesActionModal';
+import { ViewProofModal } from '../modals/ViewProofModal';
 import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
 
 interface InventoryWarehouseViewProps {
@@ -34,6 +36,16 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
   const [editingRequest, setEditingRequest] = useState<ProcurementRequest | null>(null);
   const [orderedTarget, setOrderedTarget] = useState<ProcurementRequest | null>(null);
   const [receiveTarget, setReceiveTarget] = useState<ProcurementRequest | null>(null);
+  const [selectedProofModal, setSelectedProofModal] = useState<{
+    title: string;
+    url: string;
+    details?: {
+      confirmedBy?: string | null;
+      confirmedAt?: string | null;
+      channel?: string | null;
+      notes?: string | null;
+    };
+  } | null>(null);
   const [orderedNotes, setOrderedNotes] = useState('Pembelian ke vendor sudah diproses oleh kepala warehouse.');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -57,7 +69,7 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
 
   const procurementByStatus = useMemo(
     () => ({
-      pendingFinance: procurementRequests.filter((request) => request.status === 'pending_finance' || request.status === 'pending_management'),
+      pendingFinance: procurementRequests.filter((request) => request.status === 'pending_finance' || request.status === 'pending_management' || request.status === 'pending_payment'),
       rejected: procurementRequests.filter((request) => request.status === 'rejected'),
       approved: procurementRequests.filter((request) => request.status === 'approved'),
       ordered: procurementRequests.filter((request) => request.status === 'ordered'),
@@ -74,9 +86,22 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
         ? 'violet'
         : request.status === 'approved'
         ? 'emerald'
+        : request.status === 'pending_payment'
+        ? 'amber'
         : request.status === 'rejected'
         ? 'rose'
         : 'amber';
+
+    const statusLabel =
+      request.status === 'pending_payment'
+        ? 'MENUNGGU BUKTI BAYAR FINANCE'
+        : request.status === 'pending_management'
+        ? 'MENUNGGU ACC DIREKTUR'
+        : request.status === 'pending_finance'
+        ? 'MENUNGGU REVIEW FINANCE'
+        : request.status === 'approved'
+        ? 'SIAP DIBELI (DANA SIAP)'
+        : request.status.toUpperCase();
 
     return (
       <div key={request.id} className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
@@ -89,7 +114,27 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
               <span className="text-sm font-bold text-slate-900">
                 {request.itemName.replace(/^(Material\s+Lainnya\s*(\/\s*Khusus)?\s*[-–—:\/]?\s*)/i, '').trim() || request.itemCode}
               </span>
-              <WorkspaceStatusPill label={request.status.toUpperCase()} tone={tone} />
+              <WorkspaceStatusPill label={statusLabel} tone={tone} />
+
+              {request.paymentProofUrl && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedProofModal({
+                    title: `Bukti Bayar Pengadaan: ${request.itemName} (${request.id})`,
+                    url: request.paymentProofUrl!,
+                    details: {
+                      confirmedBy: request.paymentConfirmedBy,
+                      confirmedAt: request.paymentConfirmedAt,
+                      channel: request.paymentChannel,
+                      notes: request.paymentNotes,
+                    },
+                  })}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold hover:bg-emerald-200 transition"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Lihat Bukti Bayar Finance</span>
+                </button>
+              )}
             </div>
 
             <p className="text-sm text-slate-600">{request.reason}</p>
@@ -114,10 +159,17 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
               <div className="rounded-2xl bg-white p-3 text-xs">
                 <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Timeline</span>
                 <span className="mt-1 block font-semibold text-slate-800">
-                  {request.receivedAt || request.orderedAt || 'Menunggu proses berikutnya'}
+                  {request.receivedAt || request.orderedAt || (request.paymentConfirmedAt ? `Dana dibayar ${request.paymentConfirmedAt}` : 'Menunggu proses berikutnya')}
                 </span>
               </div>
             </div>
+
+            {request.status === 'pending_payment' && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-100/60 p-3 text-xs text-amber-900 font-medium">
+                <span className="font-bold">Menunggu Bukti Transfer Finance: </span>
+                Pengadaan &gt; 5 Juta ini telah di-ACC Direktur. Saat ini menunggu Finance menyerahkan/mentransfer dana ke vendor dan mengunggah bukti bayar agar barang dapat dibeli.
+              </div>
+            )}
 
             {request.rejectionNotes ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
@@ -452,6 +504,15 @@ export const InventoryWarehouseView: React.FC<InventoryWarehouseViewProps> = ({
             setActionLoading(false);
           }
         }}
+      />
+
+      {/* View Proof of Payment Modal */}
+      <ViewProofModal
+        isOpen={selectedProofModal !== null}
+        onClose={() => setSelectedProofModal(null)}
+        title={selectedProofModal?.title || 'Bukti Pembayaran Finance'}
+        proofUrl={selectedProofModal?.url || null}
+        details={selectedProofModal?.details}
       />
     </div>
   );

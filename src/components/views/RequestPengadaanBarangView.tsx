@@ -571,28 +571,38 @@ export const RequestPengadaanBarangView: React.FC = () => {
                   2
                 </div>
                 <div>
-                  <strong className="block text-slate-900 font-semibold">Review & ACC Finance / Manajemen</strong>
+                  <strong className="block text-slate-900 font-semibold">Review & ACC Finance / Direktur</strong>
                   <span className="text-slate-500">Finance memeriksa anggaran (atau Direktur jika &gt; 5 Juta).</span>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white font-black text-[10px] shrink-0 mt-0.5">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white font-black text-[10px] shrink-0 mt-0.5">
                   3
                 </div>
                 <div>
+                  <strong className="block text-slate-900 font-semibold">Konfirmasi Bayar & Bukti Transfer (Finance)</strong>
+                  <span className="text-slate-500">Setelah di-ACC Direktur, Finance mentransfer dana & mengunggah bukti bayar resmi.</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white font-black text-[10px] shrink-0 mt-0.5">
+                  4
+                </div>
+                <div>
                   <strong className="block text-slate-900 font-semibold">Pembelian ke Vendor (Ordered)</strong>
-                  <span className="text-slate-500">Kepala Warehouse memproses PO dan menandai item sedang dibeli.</span>
+                  <span className="text-slate-500">Kepala Warehouse memproses pesanan ke vendor setelah dana dipastikan cair.</span>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-[10px] shrink-0 mt-0.5">
-                  4
+                  5
                 </div>
                 <div>
                   <strong className="block text-slate-900 font-semibold">Penerimaan & Masuk Stok (Goods Receipt)</strong>
-                  <span className="text-slate-500">Barang sampai di gudang, di-QC, dan otomatis menambah stok fisik.</span>
+                  <span className="text-slate-500">Barang sampai di gudang, di-QC, dan otomatis menambah stok fisik katalog.</span>
                 </div>
               </div>
             </div>

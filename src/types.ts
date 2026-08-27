@@ -644,6 +644,8 @@ export interface InventoryItem {
   }[];
 }
 
+export type ProcurementStatus = 'pending_finance' | 'pending_management' | 'pending_payment' | 'approved' | 'rejected' | 'ordered' | 'received';
+
 export interface ProcurementRequest {
   id: string; // e.g. "REQ-2026-0034"
   itemCode: string;
@@ -655,7 +657,7 @@ export interface ProcurementRequest {
   reason: string;
   requestedBy: string;
   requestedAt: string;
-  status: 'pending_finance' | 'pending_management' | 'approved' | 'rejected' | 'ordered' | 'received';
+  status: ProcurementStatus;
   financeApproval?: {
     approved: boolean;
     by: string;
@@ -669,6 +671,18 @@ export interface ProcurementRequest {
     at: string;
     notes?: string;
   };
+  paymentConfirmedAt?: string | null;
+  paymentConfirmedBy?: string | null;
+  paymentProofUrl?: string | null;
+  paymentChannel?: string | null;
+  paymentNotes?: string | null;
+  paymentDetails?: {
+    confirmed_by?: string;
+    confirmed_at?: string;
+    proof_url?: string;
+    channel?: string;
+    notes?: string;
+  } | null;
   orderedBy?: string | null;
   orderedAt?: string | null;
   orderedNotes?: string | null;

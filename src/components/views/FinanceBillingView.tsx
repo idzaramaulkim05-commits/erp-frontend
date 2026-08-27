@@ -2,19 +2,23 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  Eye,
   FileText,
   Landmark,
   Receipt,
   UserX,
   Wallet,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useIOMS } from '../../context/IOMSContext';
 import { Customer, MasterDataGroup, ProcurementRequest, WorkOrder } from '../../types';
 import { ConfirmActionModal } from '../modals/ConfirmActionModal';
+import { ConfirmProcurementPaymentModal } from '../modals/ConfirmProcurementPaymentModal';
 import { InvoiceModal } from '../modals/InvoiceModal';
 import { NotesActionModal } from '../modals/NotesActionModal';
 import { PaymentConfirmationModal } from '../modals/PaymentConfirmationModal';
+import { ViewProofModal } from '../modals/ViewProofModal';
 import { WorkspaceOpsHero, WorkspaceSectionShell, WorkspaceStatusPill } from '../pipeline/PipelineWidgets';
 import { DEFAULT_PAYMENT_CHANNELS, PaymentChannelItem } from '../../utils/invoice';
 
@@ -46,6 +50,7 @@ export const FinanceBillingView: React.FC = () => {
     recordCustomerPayment,
     approveProcurementByFinance,
     rejectProcurementByFinance,
+    confirmProcurementPayment,
     confirmInstallationCashPayment,
     confirmInstallationTransferPayment,
     searchQuery,
@@ -60,6 +65,17 @@ export const FinanceBillingView: React.FC = () => {
   const [selectedCustomerForInvoice, setSelectedCustomerForInvoice] = useState<Customer | null>(null);
   const [selectedCustomerForPayment, setSelectedCustomerForPayment] = useState<Customer | null>(null);
   const [selectedWoForPayment, setSelectedWoForPayment] = useState<WorkOrder | null>(null);
+  const [selectedProcurementForPayment, setSelectedProcurementForPayment] = useState<ProcurementRequest | null>(null);
+  const [selectedProofModal, setSelectedProofModal] = useState<{
+    title: string;
+    url: string;
+    details?: {
+      confirmedBy?: string | null;
+      confirmedAt?: string | null;
+      channel?: string | null;
+      notes?: string | null;
+    };
+  } | null>(null);
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannelItem[]>(DEFAULT_PAYMENT_CHANNELS);
 
   // Fetch Payment Channels from Master Data
@@ -111,6 +127,7 @@ export const FinanceBillingView: React.FC = () => {
     .reduce((sum, customer) => sum + customer.monthlyFee, 0);
 
   const pendingProcurementForFinance = procurementRequests.filter((request) => request.status === 'pending_finance');
+  const pendingPaymentProcurements = procurementRequests.filter((request) => request.status === 'pending_payment');
   const autoUninstallPending = customers.filter((customer) => customer.status === 'uninstal_pending').length;
 
   const pendingInstallationPayments = workOrders.filter((item) =>
@@ -321,41 +338,97 @@ export const FinanceBillingView: React.FC = () => {
         </div>
       </WorkspaceSectionShell>
 
-      {/* SECTION: Procurement Approval */}
+      {/* SECTION: Procurement Approval & Payment Confirmation */}
       <WorkspaceSectionShell
-        eyebrow="Procurement Approval"
-        title="Pengesahan permintaan pengadaan gudang"
-        badge={`${pendingProcurementForFinance.length} menunggu approval`}
+        eyebrow="Procurement & Payment Desk"
+        title="Pengesahan & Konfirmasi Pembayaran Pengadaan Gudang"
+        badge={`${pendingProcurementForFinance.length + pendingPaymentProcurements.length} butuh tindakan`}
       >
         <div className="divide-y divide-slate-100">
           {procurementRequests.map((request) => {
             const isPendingFinance = request.status === 'pending_finance';
+            const isPendingPayment = request.status === 'pending_payment';
 
             return (
-              <div key={request.id} className="p-5 hover:bg-slate-50/70 transition-colors flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="space-y-1.5 flex-1">
+              <div
+                key={request.id}
+                className={`p-5 transition-colors flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 ${
+                  isPendingPayment
+                    ? 'bg-amber-50/50 hover:bg-amber-50/80 border-l-4 border-amber-500'
+                    : isPendingFinance
+                    ? 'bg-emerald-50/20 hover:bg-emerald-50/40'
+                    : 'hover:bg-slate-50/70'
+                }`}
+              >
+                <div className="space-y-2 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">{request.id}</span>
                     <span className="font-bold text-sm text-slate-900">{request.itemName}</span>
                     <WorkspaceStatusPill
-                      label={request.status.toUpperCase()}
+                      label={
+                        request.status === 'pending_payment'
+                          ? 'MENUNGGU BUKTI BAYAR FINANCE'
+                          : request.status === 'pending_management'
+                          ? 'MENUNGGU ACC DIREKTUR'
+                          : request.status === 'pending_finance'
+                          ? 'MENUNGGU REVIEW FINANCE'
+                          : request.status === 'approved'
+                          ? 'SIAP DIBELI (DANA LUNAS)'
+                          : request.status.toUpperCase()
+                      }
                       tone={
                         request.status === 'approved'
                           ? 'emerald'
                           : request.status === 'pending_management'
                           ? 'violet'
+                          : request.status === 'pending_payment'
+                          ? 'amber'
                           : request.status === 'received'
                           ? 'sky'
                           : 'amber'
                       }
                     />
+
+                    {request.paymentProofUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProofModal({
+                          title: `Bukti Bayar: ${request.itemName} (${request.id})`,
+                          url: request.paymentProofUrl!,
+                          details: {
+                            confirmedBy: request.paymentConfirmedBy,
+                            confirmedAt: request.paymentConfirmedAt,
+                            channel: request.paymentChannel,
+                            notes: request.paymentNotes,
+                          },
+                        })}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold hover:bg-emerald-200 transition"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Bukti Bayar Terlampir
+                      </button>
+                    )}
                   </div>
 
+                  {isPendingPayment && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-100/60 p-2.5 text-xs text-amber-900 flex items-center gap-2 font-medium">
+                      <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>
+                        Telah disetujui Direktur/Pimpinan (<strong>{request.managementApproval?.by || 'Direksi'}</strong>). Finance wajib mentransfer dana ke vendor dan mengunggah bukti bayar agar barang dapat dibeli gudang.
+                      </span>
+                    </div>
+                  )}
+
                   <p className="text-xs text-slate-600">Alasan: {request.reason}</p>
-                  <div className="flex flex-wrap gap-3 text-xs text-slate-500 pt-1">
+                  <div className="flex flex-wrap gap-3 text-xs text-slate-500 pt-0.5">
                     <span>Jumlah: <strong>{request.quantity} {request.unit}</strong></span>
                     <span>Total: <strong className="text-emerald-700 font-mono">Rp {request.totalAmount.toLocaleString('id-ID')}</strong></span>
                     <span>Diajukan: {request.requestedBy}</span>
+                    {request.paymentConfirmedBy && (
+                      <span className="text-emerald-800 font-medium">
+                        Dibayar: {request.paymentChannel || 'Transfer'} oleh {request.paymentConfirmedBy}
+                      </span>
+                    )}
                   </div>
                   {request.rejectionNotes ? (
                     <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -364,32 +437,46 @@ export const FinanceBillingView: React.FC = () => {
                   ) : null}
                 </div>
 
-                {isPendingFinance && (
-                  <div className="flex shrink-0 flex-col gap-2">
+                {/* Actions */}
+                <div className="flex shrink-0 flex-col sm:flex-row lg:flex-col gap-2">
+                  {isPendingPayment && (
                     <button
                       type="button"
-                      onClick={() => setConfirmationState({
-                        type: 'procurement_approve',
-                        request,
-                        notes: 'Cash flow mencukupi untuk restock.',
-                      })}
-                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+                      onClick={() => setSelectedProcurementForPayment(request)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700 shadow-xs"
                     >
-                      {request.totalAmount > 5000000 ? 'Setujui & Teruskan ke Direktur' : 'Setujui Pengadaan'}
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Konfirmasi Bayar & Upload Bukti</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmationState({
-                        type: 'procurement_reject',
-                        request,
-                        notes: 'Mohon revisi estimasi harga, qty, atau alasan kebutuhan.',
-                      })}
-                      className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100"
-                    >
-                      Tolak & Minta Revisi
-                    </button>
-                  </div>
-                )}
+                  )}
+
+                  {isPendingFinance && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmationState({
+                          type: 'procurement_approve',
+                          request,
+                          notes: 'Cash flow mencukupi untuk restock.',
+                        })}
+                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+                      >
+                        {request.totalAmount > 5000000 ? 'Setujui & Teruskan ke Direktur' : 'Setujui Pengadaan'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmationState({
+                          type: 'procurement_reject',
+                          request,
+                          notes: 'Mohon revisi estimasi harga, qty, atau alasan kebutuhan.',
+                        })}
+                        className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100"
+                      >
+                        Tolak & Minta Revisi
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -608,6 +695,27 @@ export const FinanceBillingView: React.FC = () => {
         loading={confirmLoading}
         onCancel={() => setConfirmationState(null)}
         onConfirm={() => void handleConfirmFinanceAction()}
+      />
+
+      {/* Confirm Procurement Payment Modal (With Proof Upload) */}
+      <ConfirmProcurementPaymentModal
+        isOpen={selectedProcurementForPayment !== null}
+        onClose={() => setSelectedProcurementForPayment(null)}
+        request={selectedProcurementForPayment}
+        onConfirm={async (payload) => {
+          if (!selectedProcurementForPayment) return;
+          await confirmProcurementPayment(selectedProcurementForPayment.id, payload);
+          setSelectedProcurementForPayment(null);
+        }}
+      />
+
+      {/* View Proof of Payment Modal */}
+      <ViewProofModal
+        isOpen={selectedProofModal !== null}
+        onClose={() => setSelectedProofModal(null)}
+        title={selectedProofModal?.title || 'Bukti Pembayaran'}
+        proofUrl={selectedProofModal?.url || null}
+        details={selectedProofModal?.details}
       />
     </div>
   );

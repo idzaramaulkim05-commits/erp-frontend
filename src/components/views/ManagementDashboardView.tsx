@@ -226,13 +226,13 @@ export const ManagementDashboardView: React.FC = () => {
 
       <ConfirmActionModal
         open={decisionState?.type === 'approve'}
-        title="Konfirmasi Approval Capex"
+        title="Konfirmasi Approval Capex (ACC Direktur)"
         message={
           decisionState?.type === 'approve'
-            ? `Pengajuan ${decisionState.request.id} untuk ${decisionState.request.itemName} akan disetujui atasan dan dikembalikan ke warehouse sebagai approved.`
+            ? `Pengajuan ${decisionState.request.id} untuk ${decisionState.request.itemName} senilai Rp ${decisionState.request.totalAmount.toLocaleString('id-ID')} akan disetujui Direktur dan diteruskan kembali ke Finance untuk proses pembayaran serta pelampiran bukti transfer resmi.`
             : ''
         }
-        confirmLabel="Ya, Setujui"
+        confirmLabel="Ya, ACC & Kirim ke Finance"
         cancelLabel="Batal"
         tone="success"
         loading={decisionLoading}

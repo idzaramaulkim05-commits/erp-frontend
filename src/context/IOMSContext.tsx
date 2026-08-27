@@ -146,6 +146,10 @@ interface IOMSContextType {
   rejectProcurementByFinance: (reqId: string, notes: string) => Promise<void>;
   approveProcurementByManagement: (reqId: string, notes?: string) => void;
   rejectProcurementByManagement: (reqId: string, notes: string) => Promise<void>;
+  confirmProcurementPayment: (
+    reqId: string,
+    payload: { paymentProof?: File | string; paymentChannel?: string; notes?: string }
+  ) => Promise<void>;
   markProcurementAsOrdered: (reqId: string, notes?: string) => Promise<void>;
   receiveProcurementStock: (reqId: string) => void;
   createReimbursementDraft: (payload: FormData) => Promise<ReimbursementRequest>;
@@ -996,6 +1000,34 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await refreshAll();
   });
 
+  const confirmProcurementPayment = (
+    reqId: string,
+    payload: { paymentProof?: File | string; paymentChannel?: string; notes?: string }
+  ) => runStrictMutation(async () => {
+    const isFile = typeof File !== 'undefined' && payload.paymentProof instanceof File;
+    let body: any;
+    if (isFile) {
+      const formData = new FormData();
+      formData.append('payment_proof', payload.paymentProof as File);
+      if (payload.paymentChannel) formData.append('payment_channel', payload.paymentChannel);
+      if (payload.notes) formData.append('notes', payload.notes);
+      body = formData;
+    } else {
+      body = JSON.stringify({
+        payment_proof: payload.paymentProof,
+        payment_channel: payload.paymentChannel,
+        notes: payload.notes,
+      });
+    }
+
+    await apiRequest(`/procurements/${reqId}/confirm-payment`, {
+      method: 'POST',
+      body,
+    });
+    await refreshAll();
+    triggerCelebration();
+  });
+
   const markProcurementAsOrdered = (reqId: string, notes?: string) => runMutation(async () => {
     await apiRequest(`/procurements/${reqId}/mark-ordered`, {
       method: 'POST',
@@ -1229,6 +1261,7 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         rejectProcurementByFinance,
         approveProcurementByManagement,
         rejectProcurementByManagement,
+        confirmProcurementPayment,
         markProcurementAsOrdered,
         receiveProcurementStock,
         createReimbursementDraft,
