@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  Boxes,
   CheckCircle2,
   Cpu,
   Layers,
@@ -12,6 +13,7 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   Wifi,
   Zap,
 } from 'lucide-react';
@@ -32,6 +34,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
     tickets,
     workOrders,
     networkOdps,
+    inventory,
     auditLogs,
     resolveTicketRemotely,
     escalateTicketToLeadTech,
@@ -41,6 +44,9 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
   const [ticketActionTarget, setTicketActionTarget] = useState<{ ticket: TroubleTicket; action: NocConsoleAction } | null>(null);
   const [ticketActionNotes, setTicketActionNotes] = useState('');
   const [ticketNeedsReplacement, setTicketNeedsReplacement] = useState(false);
+  const [replacementItems, setReplacementItems] = useState<Array<{ itemName: string; quantity: number; unit: string }>>([
+    { itemName: '', quantity: 1, unit: 'Unit' },
+  ]);
   const [ticketActionSaving, setTicketActionSaving] = useState(false);
   const [odpFilterRegion, setOdpFilterRegion] = useState<string>('all');
   const [signalSearch, setSignalSearch] = useState<string>('');
@@ -129,9 +135,45 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
   }, [auditLogs]);
 
   // Handlers
+  const handleAddReplacementItem = () => {
+    setReplacementItems((prev) => [...prev, { itemName: '', quantity: 1, unit: 'Unit' }]);
+  };
+
+  const handleRemoveReplacementItem = (index: number) => {
+    setReplacementItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleReplacementItemChange = (index: number, field: 'itemName' | 'quantity' | 'unit', val: any) => {
+    setReplacementItems((prev) => {
+      const next = [...prev];
+      if (field === 'itemName') {
+        const invItem = inventory.find((i) => i.name === val);
+        next[index] = {
+          ...next[index],
+          itemName: val,
+          unit: invItem?.unit || next[index].unit || 'Unit',
+        };
+      } else {
+        next[index] = {
+          ...next[index],
+          [field]: val,
+        };
+      }
+      return next;
+    });
+  };
+
   const openTicketActionModal = (ticket: TroubleTicket, action: NocConsoleAction) => {
     setTicketActionTarget({ ticket, action });
     setTicketNeedsReplacement(false);
+    const defaultItem = inventory.find((i) => i.category === 'ONT' || i.name.toLowerCase().includes('onu') || i.name.toLowerCase().includes('modem')) || inventory[0];
+    setReplacementItems([
+      {
+        itemName: defaultItem?.name || '',
+        quantity: 1,
+        unit: defaultItem?.unit || 'Unit',
+      },
+    ]);
     setTicketActionNotes(
       action === 'remote_resolve'
         ? 'Konfigurasi OMCI / profiling ulang berhasil diterapkan dan koneksi pelanggan kembali normal.'
@@ -144,10 +186,18 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
     setTicketActionTarget(null);
     setTicketActionNotes('');
     setTicketNeedsReplacement(false);
+    setReplacementItems([{ itemName: '', quantity: 1, unit: 'Unit' }]);
   };
 
   const submitTicketAction = async () => {
     if (!ticketActionTarget || !ticketActionNotes.trim()) {
+      return;
+    }
+
+    const validItems = replacementItems.filter((i) => i.itemName.trim() !== '');
+
+    if (ticketActionTarget.action === 'escalate' && ticketNeedsReplacement && validItems.length === 0) {
+      alert('Silakan pilih minimal satu alat / material pengganti dari stok gudang.');
       return;
     }
 
@@ -159,6 +209,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
         await Promise.resolve(
           escalateTicketToLeadTech(ticketActionTarget.ticket.id, ticketActionNotes.trim(), {
             requiresReplacementRequest: ticketNeedsReplacement,
+            replacementItems: ticketNeedsReplacement ? validItems : [],
           }),
         );
       }
@@ -630,17 +681,106 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
         }}
       >
         {ticketActionTarget?.action === 'escalate' ? (
-          <label className="flex items-start gap-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={ticketNeedsReplacement}
-              onChange={(event) => setTicketNeedsReplacement(event.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200"
-            />
-            <span>
-              Butuh alat pengganti. Jika dicentang, sistem akan otomatis membuat request alat maintenance ke gudang sebelum pekerjaan turun ke teknisi.
-            </span>
-          </label>
+          <div className="space-y-4">
+            <label className="flex items-start gap-3 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={ticketNeedsReplacement}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setTicketNeedsReplacement(checked);
+                  if (checked && (!replacementItems.length || !replacementItems[0].itemName)) {
+                    const defaultItem = inventory.find((i) => i.category === 'ONT' || i.name.toLowerCase().includes('onu') || i.name.toLowerCase().includes('modem')) || inventory[0];
+                    setReplacementItems([
+                      {
+                        itemName: defaultItem?.name || '',
+                        quantity: 1,
+                        unit: defaultItem?.unit || 'Unit',
+                      },
+                    ]);
+                  }
+                }}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200"
+              />
+              <span>
+                Butuh alat pengganti. Jika dicentang, sistem akan otomatis membuat request alat maintenance ke gudang sesuai item yang dipilih sebelum pekerjaan turun ke teknisi.
+              </span>
+            </label>
+
+            {ticketNeedsReplacement && (
+              <div className="rounded-2xl border border-amber-200 bg-white p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                    <Boxes className="h-4 w-4 text-amber-600" />
+                    Pilih Kebutuhan Alat / Material Pengganti
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddReplacementItem}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                  >
+                    + Tambah Alat
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {replacementItems.map((item, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">Nama Barang / Material</label>
+                        <select
+                          value={item.itemName}
+                          onChange={(e) => handleReplacementItemChange(idx, 'itemName', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-hidden"
+                        >
+                          <option value="">-- Pilih dari Stok Gudang --</option>
+                          {inventory.map((inv) => (
+                            <option key={inv.id} value={inv.name}>
+                              {inv.name} (Stok: {inv.stockAvailable} {inv.unit})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="w-24">
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">Jumlah</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => handleReplacementItemChange(idx, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-hidden text-center"
+                        />
+                      </div>
+
+                      <div className="w-20">
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">Satuan</label>
+                        <input
+                          type="text"
+                          value={item.unit}
+                          onChange={(e) => handleReplacementItemChange(idx, 'unit', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 bg-slate-100 px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-500 focus:outline-hidden text-center"
+                        />
+                      </div>
+
+                      {replacementItems.length > 1 && (
+                        <div className="sm:pt-5 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveReplacementItem(idx)}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Hapus baris"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         ) : null}
       </NotesActionModal>
     </div>

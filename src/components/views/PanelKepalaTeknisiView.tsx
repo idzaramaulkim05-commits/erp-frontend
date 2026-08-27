@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRightLeft, ClipboardCheck, MapPin, Phone, RefreshCcw, UserCheck, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, ClipboardCheck, MapPin, Phone, RefreshCcw, UserCheck, Wrench } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
 import { WorkOrder } from '../../types';
 
@@ -156,82 +156,113 @@ export const PanelKepalaTeknisiView: React.FC = () => {
           </div>
         ) : (
           <div className="mt-6 space-y-4">
-            {assignmentQueue.map((workOrder) => (
-              <div key={workOrder.id} className="rounded-[26px] border border-slate-200 bg-slate-50 p-5">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white">
-                        {workOrder.id}
-                      </span>
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                        {workOrder.type === 'maintenance' ? 'WO Gangguan' : workOrder.type === 'uninstallation' ? 'WO Pencabutan' : 'WO Instalasi'}
-                      </span>
-                      <span className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${getStatusTone(workOrder.status)}`}>
-                        {getStatusLabel(workOrder.status)}
-                      </span>
-                    </div>
+            {assignmentQueue.map((workOrder) => {
+              const isWaitingWarehouse = Boolean(
+                (workOrder.installationMaterialRequestId || workOrder.maintenancePayload?.replacementFlowActive) &&
+                workOrder.installationMaterialRequestStatus === 'menunggu_persetujuan_gudang'
+              );
 
-                    <div>
-                      <div className="text-lg font-black text-slate-950">{workOrder.customerName}</div>
-                      <div className="mt-1 text-sm text-slate-500">
-                      {workOrder.type === 'maintenance'
-                        ? (workOrder.issueSummary ?? 'WO gangguan pelanggan')
-                        : workOrder.type === 'uninstallation'
-                        ? 'Pencabutan alat pelanggan dan serah-terima retur ke gudang'
-                        : (workOrder.packagePlan ?? 'Paket belum tercatat')}
+              return (
+                <div key={workOrder.id} className="rounded-[26px] border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white">
+                          {workOrder.id}
+                        </span>
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                          {workOrder.type === 'maintenance' ? 'WO Gangguan' : workOrder.type === 'uninstallation' ? 'WO Pencabutan' : 'WO Instalasi'}
+                        </span>
+                        <span className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${getStatusTone(workOrder.status)}`}>
+                          {getStatusLabel(workOrder.status)}
+                        </span>
                       </div>
-                      {workOrder.type === 'maintenance' && workOrder.maintenancePayload?.replacementFlowActive ? (
-                        <div className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">
-                          Membawa alat replacement
+
+                      <div>
+                        <div className="text-lg font-black text-slate-950">{workOrder.customerName}</div>
+                        <div className="mt-1 text-sm text-slate-500">
+                        {workOrder.type === 'maintenance'
+                          ? (workOrder.issueSummary ?? 'WO gangguan pelanggan')
+                          : workOrder.type === 'uninstallation'
+                          ? 'Pencabutan alat pelanggan dan serah-terima retur ke gudang'
+                          : (workOrder.packagePlan ?? 'Paket belum tercatat')}
                         </div>
-                      ) : null}
-                      {workOrder.type === 'uninstallation' ? (
-                        <div className="mt-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-rose-700">
-                          Wajib retur alat ke gudang
+                        {workOrder.type === 'maintenance' && workOrder.maintenancePayload?.replacementFlowActive ? (
+                          <div className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">
+                            Membawa alat replacement
+                          </div>
+                        ) : null}
+                        {workOrder.type === 'uninstallation' ? (
+                          <div className="mt-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-rose-700">
+                            Wajib retur alat ke gudang
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {isWaitingWarehouse && (
+                        <div className="flex items-start gap-2.5 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div>
+                            <span className="font-bold">Menunggu Konfirmasi Ketersediaan Barang Gudang</span>
+                            <p className="mt-0.5 text-amber-800">
+                              Gudang belum mengonfirmasi ketersediaan alat replacement / material untuk WO ini. Teknisi lapangan baru dapat ditunjuk setelah status material disetujui gudang.
+                            </p>
+                          </div>
                         </div>
-                      ) : null}
+                      )}
+
+                      <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+                        <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-slate-400" /> {workOrder.customerPhone}</div>
+                        <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-slate-400" /> {workOrder.region}</div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                        {workOrder.address}
+                      </div>
                     </div>
 
-                    <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-                      <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-slate-400" /> {workOrder.customerPhone}</div>
-                      <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-slate-400" /> {workOrder.region}</div>
+                    <div className={`w-full max-w-sm rounded-[24px] border p-4 transition-colors ${
+                      isWaitingWarehouse ? 'border-slate-200 bg-slate-100/70' : 'border-emerald-200 bg-white'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-black text-slate-900">Pilih Teknisi Lapangan</div>
+                        {isWaitingWarehouse && (
+                          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
+                            Terkunci
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {isWaitingWarehouse
+                          ? 'Penugasan teknisi terkunci sementara hingga gudang mengonfirmasi ketersediaan barang.'
+                          : 'Setelah assignment, WO akan tampil di panel teknisi lapangan sebagai pekerjaan aktif yang harus dikonfirmasi teknisi.'}
+                      </p>
+
+                      <select
+                        value={techSelections[workOrder.id] ?? ''}
+                        onChange={(event) => setTechSelections((current) => ({ ...current, [workOrder.id]: event.target.value }))}
+                        disabled={isWaitingWarehouse}
+                        className="mt-4 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-200/60 disabled:text-slate-400"
+                      >
+                        <option value="">{isWaitingWarehouse ? '-- Menunggu Konfirmasi Gudang --' : 'Pilih teknisi'}</option>
+                        {techOptions.map((user) => (
+                          <option key={user.id} value={user.id}>{user.name} • {user.roleTitle}</option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAssign(workOrder.id)}
+                        disabled={isWaitingWarehouse || !techSelections[workOrder.id]}
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isWaitingWarehouse ? 'Menunggu Konfirmasi Gudang' : 'Assign ke Teknisi'}
+                      </button>
                     </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                      {workOrder.address}
-                    </div>
-                  </div>
-
-                  <div className="w-full max-w-sm rounded-[24px] border border-emerald-200 bg-white p-4">
-                    <div className="text-sm font-black text-slate-900">Pilih Teknisi Lapangan</div>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Setelah assignment, WO akan tampil di panel teknisi lapangan sebagai pekerjaan aktif yang harus dikonfirmasi teknisi.
-                    </p>
-
-                    <select
-                      value={techSelections[workOrder.id] ?? ''}
-                      onChange={(event) => setTechSelections((current) => ({ ...current, [workOrder.id]: event.target.value }))}
-                      className="mt-4 h-12 w-full rounded-2xl border border-slate-200 px-4 text-sm text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-                    >
-                      <option value="">Pilih teknisi</option>
-                      {techOptions.map((user) => (
-                        <option key={user.id} value={user.id}>{user.name} • {user.roleTitle}</option>
-                      ))}
-                    </select>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAssign(workOrder.id)}
-                      disabled={!techSelections[workOrder.id]}
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Assign ke Teknisi
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

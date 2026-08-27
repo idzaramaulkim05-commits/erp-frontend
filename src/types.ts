@@ -493,6 +493,7 @@ export interface WorkOrder {
   ticketId?: string;
   serviceRegistrationId?: string;
   installationMaterialRequestId?: string | null;
+  installationMaterialRequestStatus?: string | null;
   warehouseReturnRequestId?: string | null;
   status: WorkOrderStatus;
   scheduledDate: string;

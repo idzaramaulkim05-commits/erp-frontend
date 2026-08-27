@@ -78,6 +78,11 @@ interface IOMSContextType {
     nocNotes: string,
     options?: {
       requiresReplacementRequest?: boolean;
+      replacementItems?: Array<{
+        itemName: string;
+        quantity: number;
+        unit: string;
+      }>;
     }
   ) => void;
   helpdeskCloseTicket: (ticketId: string, notes: string, connectionNormal: boolean) => void;
@@ -764,13 +769,25 @@ export const IOMSProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const escalateTicketToLeadTech = (
     ticketId: string,
     nocNotes: string,
-    options?: { requiresReplacementRequest?: boolean },
+    options?: {
+      requiresReplacementRequest?: boolean;
+      replacementItems?: Array<{
+        itemName: string;
+        quantity: number;
+        unit: string;
+      }>;
+    },
   ) => runMutation(async () => {
     await apiRequest(`/tickets/${ticketId}/escalate`, {
       method: 'POST',
       body: JSON.stringify({
         notes: nocNotes,
         requires_replacement_request: options?.requiresReplacementRequest ?? false,
+        replacement_items: options?.replacementItems?.map((it) => ({
+          item_name: it.itemName,
+          quantity: it.quantity,
+          unit: it.unit,
+        })) ?? [],
       }),
     });
     await refreshAll();
