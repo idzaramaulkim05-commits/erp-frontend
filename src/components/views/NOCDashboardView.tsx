@@ -135,7 +135,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
     setTicketActionNotes(
       action === 'remote_resolve'
         ? 'Konfigurasi OMCI / profiling ulang berhasil diterapkan dan koneksi pelanggan kembali normal.'
-        : 'Indikasi kendala fisik kabel/perangkat lapangan, diperlukan penanganan teknisi langsung.',
+        : (ticket.description || 'Indikasi kendala fisik kabel/perangkat lapangan, diperlukan penanganan teknisi langsung.'),
     );
   };
 
