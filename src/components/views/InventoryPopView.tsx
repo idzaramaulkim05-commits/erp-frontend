@@ -44,6 +44,9 @@ import { NetworkPop, PopDevice, PopWorkOrder, UserProfile } from '../../types';
 export const InventoryPopView: React.FC = () => {
   const { authFetch, user } = useAuth();
 
+  // Role permissions
+  const isNocUser = user?.role === 'noc' || user?.role === 'superadmin';
+
   // State
   const [pops, setPops] = useState<NetworkPop[]>([]);
   const [workOrders, setWorkOrders] = useState<PopWorkOrder[]>([]);
@@ -61,7 +64,6 @@ export const InventoryPopView: React.FC = () => {
   const [woStatusFilter, setWoStatusFilter] = useState<string>('all');
 
   // Modals state
-  const [isNewPopModalOpen, setIsNewPopModalOpen] = useState(false);
   const [isNewWoModalOpen, setIsNewWoModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isFieldReportModalOpen, setIsFieldReportModalOpen] = useState(false);
@@ -73,19 +75,6 @@ export const InventoryPopView: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Forms State
-  const [newPopForm, setNewPopForm] = useState({
-    name: '',
-    code: '',
-    region: 'Sidoarjo Kota',
-    cluster_code: 'SDA',
-    address: '',
-    pic_name: '',
-    pic_phone: '',
-    power_backup_info: 'Rectifier 48V + Baterai Lithium 100Ah',
-    rack_capacity: '42U (Terpakai 12U)',
-    notes: '',
-  });
-
   const [newWoForm, setNewWoForm] = useState({
     network_pop_id: '',
     action_type: 'add_device' as 'add_device' | 'replace_device' | 'modify_config' | 'remove_device',
@@ -230,36 +219,6 @@ export const InventoryPopView: React.FC = () => {
     setSelectedPopId(pop.id);
     setPopDetailSubTab('perangkat');
     setMainTab('detail_pop');
-  };
-
-  const handleCreatePop = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      await authFetch('/pops', {
-        method: 'POST',
-        body: JSON.stringify(newPopForm),
-      });
-      setIsNewPopModalOpen(false);
-      setNewPopForm({
-        name: '',
-        code: '',
-        region: 'Sidoarjo Kota',
-        cluster_code: 'SDA',
-        address: '',
-        pic_name: '',
-        pic_phone: '',
-        power_backup_info: 'Rectifier 48V + Baterai Lithium 100Ah',
-        rack_capacity: '42U (Terpakai 12U)',
-        notes: '',
-      });
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal menambahkan POP baru.');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleCreateWo = async (e: React.FormEvent) => {
@@ -455,44 +414,37 @@ export const InventoryPopView: React.FC = () => {
               <span>Refresh</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setNewWoForm({
-                  network_pop_id: selectedPopId || (pops[0]?.id ?? ''),
-                  action_type: 'add_device',
-                  title: '',
-                  description: '',
-                  priority: 'medium',
-                  target_device_id: '',
-                  category: 'OLT',
-                  brand: '',
-                  model: '',
-                  serial_number: '',
-                  mac_address: '',
-                  ip_management: '',
-                  rack_position: 'Rack 1 - Unit U10',
-                  power_source: 'Rectifier 48V Port 1',
-                  warehouse_materials: '',
-                  noc_instruction_guide: '',
-                  target_vlan: '',
-                });
-                setIsNewWoModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-xs cursor-pointer"
-            >
-              <PackagePlus className="h-4 w-4" />
-              <span>+ Instruksi POP Baru (NOC)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsNewPopModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition shadow-xs cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Tambah POP Baru</span>
-            </button>
+            {isNocUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNewWoForm({
+                    network_pop_id: selectedPopId || (pops[0]?.id ?? ''),
+                    action_type: 'add_device',
+                    title: '',
+                    description: '',
+                    priority: 'medium',
+                    target_device_id: '',
+                    category: 'OLT',
+                    brand: '',
+                    model: '',
+                    serial_number: '',
+                    mac_address: '',
+                    ip_management: '',
+                    rack_position: 'Rack 1 - Unit U10',
+                    power_source: 'Rectifier 48V Port 1',
+                    warehouse_materials: '',
+                    noc_instruction_guide: '',
+                    target_vlan: '',
+                  });
+                  setIsNewWoModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-xs cursor-pointer"
+              >
+                <PackagePlus className="h-4 w-4" />
+                <span>+ Instruksi POP Baru (NOC)</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -721,21 +673,23 @@ export const InventoryPopView: React.FC = () => {
                           <span>Inventori Perangkat</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewWoForm((prev) => ({
-                              ...prev,
-                              network_pop_id: pop.id,
-                              title: `Instalasi di ${pop.name}`,
-                            }));
-                            setIsNewWoModalOpen(true);
-                          }}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-emerald-300 hover:text-emerald-700 transition cursor-pointer"
-                        >
-                          <PackagePlus className="h-3.5 w-3.5" />
-                          <span>+ Penugasan</span>
-                        </button>
+                        {isNocUser && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewWoForm((prev) => ({
+                                ...prev,
+                                network_pop_id: pop.id,
+                                title: `Instalasi di ${pop.name}`,
+                              }));
+                              setIsNewWoModalOpen(true);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-emerald-300 hover:text-emerald-700 transition cursor-pointer"
+                          >
+                            <PackagePlus className="h-3.5 w-3.5" />
+                            <span>+ Penugasan</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -784,21 +738,23 @@ export const InventoryPopView: React.FC = () => {
                       <span>Tambah Perangkat Manual</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewWoForm((prev) => ({
-                          ...prev,
-                          network_pop_id: selectedPop.id,
-                          title: `Pekerjaan Perangkat di ${selectedPop.name}`,
-                        }));
-                        setIsNewWoModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer"
-                    >
-                      <PackagePlus className="h-3.5 w-3.5" />
-                      <span>+ Instruksi NOC (Alur Kerja)</span>
-                    </button>
+                    {isNocUser && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewWoForm((prev) => ({
+                            ...prev,
+                            network_pop_id: selectedPop.id,
+                            title: `Pekerjaan Perangkat di ${selectedPop.name}`,
+                          }));
+                          setIsNewWoModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer"
+                      >
+                        <PackagePlus className="h-3.5 w-3.5" />
+                        <span>+ Instruksi NOC (Alur Kerja)</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1031,14 +987,16 @@ export const InventoryPopView: React.FC = () => {
                   ))}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsNewWoModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer"
-                >
-                  <PackagePlus className="h-3.5 w-3.5" />
-                  <span>+ Buat Instruksi POP</span>
-                </button>
+                {isNocUser && (
+                  <button
+                    type="button"
+                    onClick={() => setIsNewWoModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer"
+                  >
+                    <PackagePlus className="h-3.5 w-3.5" />
+                    <span>+ Buat Instruksi POP</span>
+                  </button>
+                )}
               </div>
 
               {/* Work Order Cards List */}
@@ -1235,140 +1193,6 @@ export const InventoryPopView: React.FC = () => {
             </div>
           )}
         </>
-      )}
-
-      {/* MODAL: TAMBAH POP BARU */}
-      {isNewPopModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-6">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-900 px-6 py-4 text-white">
-              <div className="flex items-center gap-2.5">
-                <Server className="h-5 w-5 text-emerald-400" />
-                <h3 className="text-sm font-bold">Registrasi POP / Server Cabang Baru</h3>
-              </div>
-              <button type="button" onClick={() => setIsNewPopModalOpen(false)} className="rounded p-1 text-slate-400 hover:text-white">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreatePop} className="p-6 space-y-3.5 text-xs">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Nama POP / Shelter</label>
-                  <input
-                    type="text"
-                    required
-                    value={newPopForm.name}
-                    onChange={(e) => setNewPopForm({ ...newPopForm, name: e.target.value })}
-                    placeholder="Contoh: POP Sidoarjo Kota - Alun-Alun"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Kode POP</label>
-                  <input
-                    type="text"
-                    required
-                    value={newPopForm.code}
-                    onChange={(e) => setNewPopForm({ ...newPopForm, code: e.target.value.toUpperCase() })}
-                    placeholder="Contoh: SDA-01"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none uppercase font-mono font-bold focus:border-emerald-400 bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Wilayah / Cluster</label>
-                  <input
-                    type="text"
-                    required
-                    value={newPopForm.region}
-                    onChange={(e) => setNewPopForm({ ...newPopForm, region: e.target.value })}
-                    placeholder="Contoh: Sidoarjo Kota"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Kapasitas Rak</label>
-                  <input
-                    type="text"
-                    value={newPopForm.rack_capacity}
-                    onChange={(e) => setNewPopForm({ ...newPopForm, rack_capacity: e.target.value })}
-                    placeholder="Contoh: 42U (Terpakai 12U)"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700 block">Alamat Lokasi POP</label>
-                <textarea
-                  rows={2}
-                  required
-                  value={newPopForm.address}
-                  onChange={(e) => setNewPopForm({ ...newPopForm, address: e.target.value })}
-                  placeholder="Alamat lengkap gedung, shelter, atau tiang transmisi..."
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Nama PIC</label>
-                  <input
-                    type="text"
-                    value={newPopForm.pic_name}
-                    onChange={(e) => setNewPopForm({ ...newPopForm, pic_name: e.target.value })}
-                    placeholder="Nama penanggung jawab on-site"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">No. Telepon / HP PIC</label>
-                  <input
-                    type="text"
-                    value={newPopForm.pic_phone}
-                    onChange={(e) => setNewPopForm({ ...newPopForm, pic_phone: e.target.value })}
-                    placeholder="08123456789"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700 block">Power Backup & Rectifier</label>
-                <input
-                  type="text"
-                  value={newPopForm.power_backup_info}
-                  onChange={(e) => setNewPopForm({ ...newPopForm, power_backup_info: e.target.value })}
-                  placeholder="Contoh: Rectifier Delta 48V 50A + Baterai Shoto 100Ah"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setIsNewPopModalOpen(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 cursor-pointer disabled:opacity-60"
-                >
-                  {submitting ? 'Menyimpan...' : 'Simpan POP Baru'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       {/* MODAL: BUAT INSTRUKSI POP BARU (NOC) */}
