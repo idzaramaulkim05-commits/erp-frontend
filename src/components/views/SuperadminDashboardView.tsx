@@ -36,11 +36,23 @@ interface SuperadminDashboardViewProps {
 
 type AdminMappingPayload = {
   networkSummary: {
+    totalPops?: number;
     totalOdps: number;
     totalPorts: number;
     usedPorts: number;
     availablePorts: number;
   };
+  pops?: Array<{
+    id: string;
+    name: string;
+    code: string;
+    region: string;
+    cluster_code?: string;
+    address: string;
+    pic_name?: string;
+    status: string;
+    devices_count?: number;
+  }>;
   odps: Array<{
     id: string;
     region: string;
@@ -518,10 +530,23 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   const addGroupRow = () => {
     if (!currentGroup) return;
-    const nextRow = Object.fromEntries(currentGroup.editableFields.map((field) => [field, '']));
+    const nextRow = Object.fromEntries(
+      currentGroup.editableFields.map((field) => [
+        field,
+        field === 'status' ? 'active' : field === 'region' ? 'Sidoarjo Kota' : '',
+      ])
+    );
     setDraftGroups((state) => ({
       ...state,
       [currentGroup.key]: [...(state[currentGroup.key] ?? []), nextRow],
+    }));
+  };
+
+  const removeGroupRow = (rowIndex: number) => {
+    if (!currentGroup) return;
+    setDraftGroups((state) => ({
+      ...state,
+      [currentGroup.key]: (state[currentGroup.key] ?? []).filter((_, index) => index !== rowIndex),
     }));
   };
 
@@ -969,53 +994,249 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   );
 
   const renderMasterData = () => (
-    <div className="grid gap-6 lg:grid-cols-[0.35fr_0.65fr]">
+    <div className="grid gap-6 lg:grid-cols-[0.32fr_0.68fr]">
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <h3 className="text-lg font-black text-slate-950">Kelompok master data</h3>
+        <h3 className="text-lg font-black text-slate-950">Kelompok Master Data</h3>
+        <p className="mt-1 text-xs text-slate-500">Pilih kelompok data master untuk dikelola oleh Superadmin.</p>
         <div className="mt-4 space-y-2">
-          {masterGroups.map((group) => (
-            <button
-              key={group.key}
-              onClick={() => setSelectedGroupKey(group.key)}
-              className={`w-full rounded-2xl border px-4 py-3 text-left text-sm ${selectedGroupKey === group.key ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'}`}
-            >
-              <p className="font-semibold">{group.label}</p>
-              <p className="mt-1 text-xs text-slate-500">{group.items.length} item referensi</p>
-            </button>
-          ))}
+          {masterGroups.map((group) => {
+            const count = (draftGroups[group.key] ?? group.items ?? []).length;
+            const isSelected = selectedGroupKey === group.key;
+
+            return (
+              <button
+                key={group.key}
+                onClick={() => setSelectedGroupKey(group.key)}
+                className={`w-full rounded-2xl border px-4 py-3.5 text-left transition cursor-pointer ${
+                  isSelected
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-xs'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/70'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold">{group.label}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isSelected ? 'bg-emerald-200/70 text-emerald-900' : 'bg-slate-100 text-slate-600'}`}>
+                    {count} item
+                  </span>
+                </div>
+                <p className="mt-1 font-mono text-[11px] text-slate-400">key: {group.key}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-100 pb-4">
           <div>
-            <h3 className="text-lg font-black text-slate-950">{currentGroup?.label ?? 'Master Data'}</h3>
-            <p className="text-sm text-slate-500">Edit data referensi yang menjadi sumber dropdown dan referensi workflow.</p>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-emerald-800">
+                Master Data
+              </span>
+              <h3 className="text-lg font-black text-slate-950">{currentGroup?.label ?? 'Master Data'}</h3>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Superadmin dapat <strong>menambah, mengedit</strong>, dan <strong>menghapus</strong> data referensi yang tersinkronisasi di sistem.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={addGroupRow} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Tambah Baris</button>
-            <button onClick={() => void saveCurrentGroup()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-              <Save className="h-4 w-4" />
-              Simpan
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={addGroupRow}
+              className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-emerald-300 transition cursor-pointer shadow-2xs"
+            >
+              <Plus className="h-4 w-4 text-emerald-600" />
+              <span>Tambah {currentGroup?.key === 'pops' ? 'POP Baru' : 'Baris'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveCurrentGroup()}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs"
+            >
+              <Save className="h-4 w-4 text-emerald-400" />
+              <span>Simpan Master Data</span>
             </button>
           </div>
         </div>
-        <div className="mt-5 space-y-3">
-          {currentGroupDraft.map((row, rowIndex) => (
-            <div key={`${currentGroup?.key ?? 'group'}-${rowIndex}`} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-              {currentGroup?.editableFields.map((field) => (
-                <label key={field} className="block">
-                  <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{field}</span>
-                  <input
-                    value={String(row[field] ?? '')}
-                    onChange={(event) => updateGroupField(rowIndex, field, event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                  />
-                </label>
-              ))}
-            </div>
-          ))}
-        </div>
+
+        {currentGroupDraft.length === 0 ? (
+          <div className="mt-6 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+            <p className="text-sm font-bold text-slate-800">Belum ada item pada kelompok {currentGroup?.label}</p>
+            <p className="mt-1 text-xs text-slate-500">Klik tombol "Tambah" di atas untuk menambahkan data baru.</p>
+          </div>
+        ) : currentGroup?.key === 'pops' ? (
+          /* POP Specialized Master Cards */
+          <div className="mt-5 space-y-4">
+            {currentGroupDraft.map((row, rowIndex) => (
+              <div
+                key={`pop-master-${rowIndex}`}
+                className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-2xs space-y-3 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg bg-slate-900 px-2 py-0.5 font-mono text-[11px] font-bold text-white">
+                      POP #{rowIndex + 1}
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {String(row['name'] || row['code'] || 'POP Baru')}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeGroupRow(rowIndex)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50/80 px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                    title="Hapus POP dari Master Data"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Kode POP</span>
+                    <input
+                      type="text"
+                      placeholder="SDA-01"
+                      value={String(row['code'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'code', e.target.value.toUpperCase())}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-mono font-bold uppercase outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Nama POP / Server Cabang</span>
+                    <input
+                      type="text"
+                      placeholder="POP Sidoarjo Kota"
+                      value={String(row['name'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'name', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-semibold outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Wilayah / Kota</span>
+                    <input
+                      type="text"
+                      placeholder="Sidoarjo Kota"
+                      value={String(row['region'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'region', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Cluster Code</span>
+                    <input
+                      type="text"
+                      placeholder="SDA"
+                      value={String(row['cluster_code'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'cluster_code', e.target.value.toUpperCase())}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-mono outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Nama PIC</span>
+                    <input
+                      type="text"
+                      placeholder="Nama penanggung jawab"
+                      value={String(row['pic_name'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'pic_name', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Status POP</span>
+                    <select
+                      value={String(row['status'] ?? 'active')}
+                      onChange={(e) => updateGroupField(rowIndex, 'status', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-bold outline-none focus:border-emerald-400"
+                    >
+                      <option value="active">🟢 Aktif (Active)</option>
+                      <option value="maintenance">🟠 Maintenance</option>
+                      <option value="inactive">⚪ Inaktif (Inactive)</option>
+                    </select>
+                  </label>
+
+                  <label className="block space-y-1 sm:col-span-2">
+                    <span className="font-bold text-slate-600 block">Alamat Lengkap POP</span>
+                    <input
+                      type="text"
+                      placeholder="Alamat shelter / lokasi gedung"
+                      value={String(row['address'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'address', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="font-bold text-slate-600 block">Kapasitas Rak</span>
+                    <input
+                      type="text"
+                      placeholder="42U (Terpakai 12U)"
+                      value={String(row['rack_capacity'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'rack_capacity', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1 sm:col-span-2 lg:col-span-3">
+                    <span className="font-bold text-slate-600 block">Power Backup & Rectifier</span>
+                    <input
+                      type="text"
+                      placeholder="Rectifier Delta 48V 50A + Baterai Shoto 100Ah"
+                      value={String(row['power_backup_info'] ?? '')}
+                      onChange={(e) => updateGroupField(rowIndex, 'power_backup_info', e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Standard Master Group Row Cards */
+          <div className="mt-5 space-y-3">
+            {currentGroupDraft.map((row, rowIndex) => (
+              <div
+                key={`${currentGroup?.key ?? 'group'}-${rowIndex}`}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3 shadow-2xs"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                  <span className="font-mono text-[11px] font-bold text-slate-500">Item #{rowIndex + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeGroupRow(rowIndex)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                    title="Hapus baris ini"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {currentGroup?.editableFields.map((field) => (
+                    <label key={field} className="block">
+                      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                        {field}
+                      </span>
+                      <input
+                        value={String(row[field] ?? '')}
+                        onChange={(event) => updateGroupField(rowIndex, field, event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs outline-none focus:border-emerald-400"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1025,21 +1246,26 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-950">Kepala navigasi</h3>
-            <p className="text-sm text-slate-500">Struktur kepala navigasi yang akan membungkus modul-modul di navbar.</p>
+            <h3 className="text-lg font-black text-slate-950">Kepala Navigasi</h3>
+            <p className="text-sm text-slate-500">Struktur kepala navigasi yang membungkus modul-modul di navbar.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={addNavigationHeadDraft} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
-              <Plus className="h-4 w-4" />
-              Tambah Head
+            <button
+              type="button"
+              onClick={addNavigationHeadDraft}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
+            >
+              <Plus className="h-4 w-4 text-emerald-600" />
+              <span>Tambah Head</span>
             </button>
             <button
+              type="button"
               onClick={() => void saveNavigationHeads()}
               disabled={!canSaveNavigationHeads}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 cursor-pointer shadow-xs"
             >
-              <Save className="h-4 w-4" />
-              Simpan Head
+              <Save className="h-4 w-4 text-emerald-400" />
+              <span>Simpan Head</span>
             </button>
           </div>
         </div>
@@ -1048,66 +1274,89 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           <div className="mt-5 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
             <p className="text-base font-bold text-slate-900">Belum ada kepala navigasi</p>
             <p className="mt-2 text-sm text-slate-500">
-              Tambahkan minimal satu head navigasi agar modul bisa dikelompokkan dan disimpan dengan benar.
+              Tambahkan minimal satu kepala navigasi sebelum menyimpan struktur navbar.
             </p>
-            <button onClick={addNavigationHeadDraft} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-              <Plus className="h-4 w-4" />
-              Tambah Head Pertama
-            </button>
           </div>
         ) : (
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {headDraftEntries.map(([draftKey, draft]) => (
-              <div key={draftKey} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                {(() => {
-                  const isNewHeadDraft = draftKey.startsWith('draft_head_');
-                  return (
-                    <>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
-                  {draft.key.trim() || 'head_baru'}
-                </p>
-                <input
-                  value={draft.key}
-                  onChange={(event) => {
-                    if (!isNewHeadDraft) return;
-                    setHeadDrafts((state) => ({
-                      ...state,
-                      [draftKey]: { ...draft, key: normalizeNavigationHeadKey(event.target.value) },
-                    }));
-                    setError(null);
-                  }}
-                  placeholder="Key head, contoh: operasional"
-                  readOnly={!isNewHeadDraft}
-                  className={`mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm ${!isNewHeadDraft ? 'cursor-not-allowed bg-slate-100 text-slate-500' : ''}`}
-                />
-                <input
-                  value={draft.label}
-                  onChange={(event) => setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, label: event.target.value } }))}
-                  placeholder="Label head"
-                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                />
-                <input
-                  type="number"
-                  value={draft.order}
-                  onChange={(event) => setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, order: Number(event.target.value) } }))}
-                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                />
-                <label className="mt-3 flex items-center gap-3 text-sm font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={draft.isActive}
-                    onChange={(event) => setHeadDrafts((state) => ({ ...state, [draftKey]: { ...draft, isActive: event.target.checked } }))}
-                  />
-                  Head aktif
-                </label>
-                {!isNewHeadDraft && (
-                  <p className="mt-2 text-xs text-slate-500">Key head existing bersifat kode internal dan tidak bisa diubah dari sini.</p>
-                )}
-                    </>
-                  );
-                })()}
-              </div>
-            ))}
+          <div className="mt-5 space-y-3">
+            {headDraftEntries.map(([headKey, head]) => {
+              const isNewHeadDraft = headKey.startsWith('draft_head_');
+              return (
+                <div key={headKey} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4 items-end">
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Key</span>
+                    <input
+                      value={head.key}
+                      readOnly={!isNewHeadDraft}
+                      onChange={(event) => {
+                        if (!isNewHeadDraft) return;
+                        setHeadDrafts((state) => ({
+                          ...state,
+                          [headKey]: { ...head, key: normalizeNavigationHeadKey(event.target.value) },
+                        }));
+                      }}
+                      className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono font-bold ${!isNewHeadDraft ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Label</span>
+                    <input
+                      value={head.label}
+                      onChange={(event) => {
+                        setHeadDrafts((state) => ({
+                          ...state,
+                          [headKey]: { ...head, label: event.target.value },
+                        }));
+                      }}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Order</span>
+                    <input
+                      type="number"
+                      value={head.order}
+                      onChange={(event) => {
+                        setHeadDrafts((state) => ({
+                          ...state,
+                          [headKey]: { ...head, order: Number(event.target.value) },
+                        }));
+                      }}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                    />
+                  </label>
+                  <div className="flex items-center justify-between gap-2 pb-1">
+                    <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={head.isActive}
+                        onChange={(event) => {
+                          setHeadDrafts((state) => ({
+                            ...state,
+                            [headKey]: { ...head, isActive: event.target.checked },
+                          }));
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                      />
+                      Aktif
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeadDrafts((state) => {
+                          const next = { ...state };
+                          delete next[headKey];
+                          return next;
+                        });
+                      }}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1115,10 +1364,14 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-950">Daftar modul aplikasi</h3>
-            <p className="text-sm text-slate-500">Nama modul, target route internal, head navigasi, urutan, dan visibilitas modul.</p>
+            <h3 className="text-lg font-black text-slate-950">Daftar Modul Navigasi</h3>
+            <p className="text-sm text-slate-500">Kelola metadata modul, kepala navigasi, dan target route aplikasi.</p>
           </div>
-          <button onClick={openCreateModule} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+          <button
+            type="button"
+            onClick={openCreateModule}
+            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer"
+          >
             <Plus className="h-4 w-4" />
             Tambah Modul
           </button>
@@ -1126,41 +1379,34 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
         <div className="mt-5 space-y-3">
           {adminModules.map((module) => (
-            <div key={module.key} className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 xl:grid-cols-[1fr_0.9fr_0.7fr_auto]">
-              <div>
-                <p className="text-sm font-bold text-slate-900">{module.label}</p>
-                <p className="mt-1 text-xs text-slate-500">{module.description}</p>
-                <p className="mt-2 text-xs font-semibold text-emerald-700">{module.key} {'->'} {module.routeTarget}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${module.showInNavbar ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
-                    {module.showInNavbar ? 'Tampil di Navbar' : 'Dashboard Only'}
-                  </span>
-                  {module.adminOnlyDashboard && (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-                      Admin Tool
-                    </span>
-                  )}
+            <div key={module.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">{module.key}</span>
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{module.navigationHeadKey}</span>
+                  </div>
+                  <h4 className="mt-1 text-base font-bold text-slate-950">{module.label}</h4>
+                  <p className="text-xs text-slate-500">{module.description}</p>
+                  <p className="mt-1 text-xs font-mono text-slate-600">{module.routeTarget}</p>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Navigation Head</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">{module.navigationHeadKey}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Order</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">{module.order}</p>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => openEditModule(module)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
-                  Edit Modul
-                </button>
-                <button
-                  onClick={() => void deleteModule(module)}
-                  className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Hapus
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditModule(module)}
+                    className="rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteModule(module)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -1174,22 +1420,26 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
       <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-950">Mapping modul terhadap role</h3>
+            <h3 className="text-lg font-black text-slate-950">Mapping Modul terhadap Role</h3>
             <p className="text-sm text-slate-500">Pilih role, lalu atur menu apa saja yang tampil di bawah kepala navigasi untuk role tersebut.</p>
           </div>
           <div className="flex items-center gap-2">
             <select
               value={selectedMappingRole}
               onChange={(event) => setSelectedMappingRole(event.target.value as RoleMeta['role'])}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold outline-none"
             >
               {nonSuperadminRoles.map((role) => (
-                <option key={role.role} value={role.role}>{role.role}</option>
+                <option key={role.role} value={role.role}>{role.roleTitle || role.role}</option>
               ))}
             </select>
-            <button onClick={() => void saveRoleModuleMappings()} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
-              <Save className="h-4 w-4" />
-              Simpan Mapping
+            <button
+              type="button"
+              onClick={() => void saveRoleModuleMappings()}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <Save className="h-4 w-4 text-emerald-400" />
+              <span>Simpan Mapping</span>
             </button>
           </div>
         </div>
@@ -1206,26 +1456,26 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
             return (
               <div key={head.key} className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{head.key}</p>
-                    <h4 className="mt-1 text-lg font-black text-slate-950">{head.label}</h4>
+                    <h4 className="mt-0.5 text-base font-black text-slate-950">{head.label}</h4>
                   </div>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                     {modulesUnderHead.length} modul
                   </span>
                 </div>
 
-                <div className="mt-5 space-y-3">
+                <div className="mt-4 space-y-2.5">
                   {modulesUnderHead.map((module) => {
                     const existing = selectedRoleMappingDraft.find((mapping) => mapping.moduleKey === module.key);
                     const checked = existing?.isVisible ?? false;
 
                     return (
-                      <label key={module.key} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <label key={module.key} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 hover:bg-slate-50 cursor-pointer">
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{module.label}</p>
-                          <p className="mt-1 text-xs text-slate-500">{module.description}</p>
+                          <p className="text-xs font-bold text-slate-900">{module.label}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">{module.description}</p>
                         </div>
                         <input
                           type="checkbox"
@@ -1249,7 +1499,7 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
                               };
                             });
                           }}
-                          className="h-5 w-5 rounded border-slate-300 text-emerald-600"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 cursor-pointer"
                         />
                       </label>
                     );
@@ -1264,10 +1514,11 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
 
   const renderMappings = () => (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-5">
         {[
+          { label: 'Server Cabang (POP)', value: mappingPayload?.networkSummary?.totalPops ?? (mappingPayload?.pops?.length ?? 0), icon: Server },
           { label: 'ODP Terdaftar', value: mappingPayload?.networkSummary.totalOdps ?? 0, icon: Network },
-          { label: 'Total Port', value: mappingPayload?.networkSummary.totalPorts ?? 0, icon: Server },
+          { label: 'Total Port', value: mappingPayload?.networkSummary.totalPorts ?? 0, icon: Layers3 },
           { label: 'Port Terpakai', value: mappingPayload?.networkSummary.usedPorts ?? 0, icon: Activity },
           { label: 'Port Tersedia', value: mappingPayload?.networkSummary.availablePorts ?? 0, icon: Wifi },
         ].map((item) => {
@@ -1275,38 +1526,73 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
           return (
             <div key={item.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
               <Icon className="h-5 w-5 text-emerald-700" />
-              <p className="mt-4 text-sm font-semibold text-slate-500">{item.label}</p>
-              <p className="mt-1 text-3xl font-black text-slate-950">{item.value}</p>
+              <p className="mt-4 text-xs font-semibold text-slate-500">{item.label}</p>
+              <p className="mt-1 text-2xl font-black text-slate-950">{item.value}</p>
             </div>
           );
         })}
       </div>
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <h3 className="text-lg font-black text-slate-950">Ringkasan ODP & port binding</h3>
-          <div className="mt-5 space-y-3">
-            {mappingPayload?.odps.map((odp) => (
-              <div key={odp.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-6">
+          {/* POP Infrastructure Table */}
+          <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-950">Server Cabang & Hub POP</h3>
+                <p className="text-xs text-slate-500">Daftar node server cabang aktif di seluruh cluster</p>
+              </div>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+                {mappingPayload?.pops?.length ?? 0} POP
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-2.5">
+              {(mappingPayload?.pops ?? []).map((pop) => (
+                <div key={pop.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
                   <div>
-                    <p className="font-bold text-slate-900">{odp.id}</p>
-                    <p className="text-xs text-slate-500">{odp.region} · {odp.oltHost} · {odp.ponSlot}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-slate-900">{pop.code}</span>
+                      <span className="font-bold text-slate-800">{pop.name}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{pop.address} • PIC: {pop.pic_name || 'NOC'}</p>
                   </div>
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                    {odp.usedPorts}/{odp.totalPorts} Port
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${pop.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {pop.status}
                   </span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          {/* ODP Table */}
+          <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+            <h3 className="text-base font-black text-slate-950">Ringkasan ODP & Port Binding</h3>
+            <div className="mt-4 space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+              {mappingPayload?.odps.map((odp) => (
+                <div key={odp.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-900">{odp.id}</p>
+                      <p className="text-[11px] text-slate-500">{odp.region} · {odp.oltHost} · {odp.ponSlot}</p>
+                    </div>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                      {odp.usedPorts}/{odp.totalPorts} Port
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
         <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-          <h3 className="text-lg font-black text-slate-950">Role to division map</h3>
-          <div className="mt-5 space-y-3">
+          <h3 className="text-base font-black text-slate-950">Role to Division Map</h3>
+          <div className="mt-4 space-y-2.5">
             {mappingPayload?.roleDivisionMap.map((item, index) => (
-              <div key={`${item.role ?? 'map'}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold text-slate-900">{String(item.roleTitle ?? item.role ?? '-')}</p>
-                <p className="mt-1 text-xs text-slate-500">{String(item.division ?? '-')}</p>
+              <div key={`${item.role ?? 'map'}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
+                <p className="font-bold text-slate-900">{String(item.roleTitle ?? item.role ?? '-')}</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">Divisi: {String(item.division ?? '-')}</p>
               </div>
             ))}
           </div>
