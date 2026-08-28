@@ -222,7 +222,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
   return (
     <div className="space-y-6">
       {/* Quick Action Modules Banners */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Request PPPoE Card */}
         <div className="flex flex-col justify-between rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs">
           <div className="space-y-3">
@@ -232,8 +232,8 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
                   <Wifi className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-950">Aktivasi Kredensial PPPoE</h3>
-                  <p className="text-xs text-slate-500">Pasang baru menunggu pembuatan username & password</p>
+                  <h3 className="text-base font-black text-slate-950">Aktivasi PPPoE</h3>
+                  <p className="text-xs text-slate-500">Pasang baru menunggu kredensial</p>
                 </div>
               </div>
               <WorkspaceStatusPill
@@ -244,7 +244,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
 
             {pendingPppoeWorkOrders.length === 0 ? (
               <p className="text-xs text-slate-500 italic py-2">
-                Tidak ada permintaan PPPoE yang tertunda saat ini. Semua instalasi baru telah memiliki akun.
+                Tidak ada permintaan PPPoE yang tertunda saat ini.
               </p>
             ) : (
               <div className="space-y-2 py-1">
@@ -267,7 +267,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
               onClick={() => navigate('/app/request-pppoe-noc')}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
             >
-              <span>Buka Modul Request PPPoE</span>
+              <span>Request PPPoE</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -282,8 +282,8 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-950">QC Verifikasi Lapangan</h3>
-                  <p className="text-xs text-slate-500">Pekerjaan teknisi selesai dan menunggu approval QC</p>
+                  <h3 className="text-base font-black text-slate-950">QC Verifikasi Pelanggan</h3>
+                  <p className="text-xs text-slate-500">Hasil kerja teknisi di pelanggan</p>
                 </div>
               </div>
               <WorkspaceStatusPill
@@ -294,7 +294,7 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
 
             {pendingQcWorkOrders.length === 0 ? (
               <p className="text-xs text-slate-500 italic py-2">
-                Seluruh pekerjaan instalasi & perbaikan telah tuntas diverifikasi oleh tim NOC.
+                Seluruh pekerjaan instalasi & perbaikan telah tuntas diverifikasi.
               </p>
             ) : (
               <div className="space-y-2 py-1">
@@ -317,7 +317,43 @@ export const NOCDashboardView: React.FC<NOCDashboardViewProps> = ({ onSelectTick
               onClick={() => navigate('/app/qc-instalasi-noc')}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
             >
-              <span>Buka Modul QC Instalasi NOC</span>
+              <span>QC Instalasi Pelanggan</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Inventory & Work Orders POP Card */}
+        <div className="flex flex-col justify-between rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <Server className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-950">Inventory POP</h3>
+                  <p className="text-xs text-slate-500">Server cabang, OLT, Switch & Penugasan</p>
+                </div>
+              </div>
+              <WorkspaceStatusPill
+                label="HUB KONTROL"
+                tone="emerald"
+              />
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed py-1">
+              Kelola daftar perangkat terpasang di POP, buat instruksi penambahan/penggantian alat ke teknisi, dan lakukan QC crosscheck teknis on-site.
+            </p>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => navigate('/app/inventory-pop')}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3 text-xs font-bold text-white transition hover:bg-emerald-600"
+            >
+              <span>Buka Inventory & Mutasi POP</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

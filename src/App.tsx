@@ -42,6 +42,7 @@ import { RequestGudangInstalasiView } from './components/views/RequestGudangInst
 import { AktivasiInstalasiView } from './components/views/AktivasiInstalasiView';
 import { RequestPengadaanBarangView } from './components/views/RequestPengadaanBarangView';
 import { StokBarangView } from './components/views/StokBarangView';
+import { InventoryPopView } from './components/views/InventoryPopView';
 
 // Modals
 import { NewTicketModal } from './components/modals/NewTicketModal';
@@ -218,6 +219,8 @@ const MainIOMSApp: React.FC = () => {
         );
       case 'stok_barang':
         return <StokBarangView />;
+      case 'inventory_pop':
+        return <InventoryPopView />;
       case 'request_pengadaan_barang':
         return <RequestPengadaanBarangView />;
       case 'kanban':
@@ -369,6 +372,8 @@ export default function App() {
             <Route path="/app/field-tech" element={<MainIOMSApp />} />
             <Route path="/app/finance" element={<MainIOMSApp />} />
             <Route path="/app/inventory" element={<MainIOMSApp />} />
+            <Route path="/app/stok-barang" element={<MainIOMSApp />} />
+            <Route path="/app/inventory-pop" element={<MainIOMSApp />} />
             <Route path="/app/request-pengadaan-barang" element={<MainIOMSApp />} />
             <Route path="/app/kanban" element={<MainIOMSApp />} />
             <Route path="/app/network-map" element={<MainIOMSApp />} />

@@ -39,6 +39,7 @@ export type AppModule =
   | 'finance'
   | 'inventory'
   | 'stok_barang'
+  | 'inventory_pop'
   | 'request_pengadaan_barang'
   | 'kanban'
   | 'network_map'
@@ -745,3 +746,125 @@ export interface ActivityAuditLog {
   details: string;
   type: 'info' | 'warning' | 'success' | 'alert';
 }
+
+export interface PopDevice {
+  id: string;
+  networkPopId: string;
+  inventoryItemId?: string | null;
+  category: string; // 'OLT' | 'Switch Core' | 'Switch Distribution' | 'Router / BRAS' | 'Rectifier' | 'Baterai Bank' | 'UPS' | 'SFP Module' | 'Server' | 'ODF / Patch Panel' | 'Environment / CCTV' | 'Material / Spare'
+  brand: string;
+  model: string;
+  serialNumber?: string | null;
+  macAddress?: string | null;
+  ipManagement?: string | null;
+  rackPosition?: string | null;
+  powerSource?: string | null;
+  status: 'active' | 'backup' | 'standby' | 'maintenance' | 'faulty' | 'decommissioned';
+  installedAt?: string | null;
+  installedBy?: string | null;
+  lastCheckedAt?: string | null;
+  specifications?: Record<string, any>;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface NetworkPop {
+  id: string; // e.g. "POP-SDA-01"
+  name: string;
+  code: string;
+  region: string;
+  clusterCode?: string | null;
+  address: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  picName?: string | null;
+  picPhone?: string | null;
+  powerBackupInfo?: string | null;
+  rackCapacity?: string | null;
+  status: 'active' | 'maintenance' | 'inactive';
+  notes?: string | null;
+  devicesCount?: number;
+  activeDevicesCount?: number;
+  devices?: PopDevice[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PopWorkOrder {
+  id: string; // e.g. "WO-POP-2026-001"
+  networkPopId: string;
+  popName?: string;
+  popRegion?: string;
+  actionType: 'add_device' | 'replace_device' | 'modify_config' | 'remove_device';
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending_lead_tech' | 'assigned_to_tech' | 'in_progress' | 'waiting_noc_qc' | 'completed' | 'rejected_by_noc' | 'cancelled';
+  targetDeviceId?: string | null;
+  targetDeviceInfo?: {
+    id?: string;
+    category?: string;
+    brand?: string;
+    model?: string;
+    serialNumber?: string;
+    macAddress?: string;
+    rackPosition?: string;
+  } | null;
+  newDevicePayload?: {
+    category?: string;
+    brand?: string;
+    model?: string;
+    serialNumber?: string;
+    macAddress?: string;
+    ipManagement?: string;
+    rackPosition?: string;
+    powerSource?: string;
+    specifications?: Record<string, any>;
+    inventoryItemId?: string;
+  } | null;
+  materialsFromWarehouse?: {
+    itemName: string;
+    quantity: number;
+    unit: string;
+  }[] | null;
+  assignedLeadName?: string | null;
+  assignedTechId?: string | null;
+  assignedTechName?: string | null;
+  scheduledDate?: string | null;
+  fieldReport?: {
+    installedAt?: string;
+    rackUnit?: string;
+    serialNumber?: string;
+    macAddress?: string;
+    ipAddress?: string;
+    testResult?: string;
+    technicianNotes?: string;
+    photos?: string[];
+    submittedBy?: string;
+  } | null;
+  nocInstruction?: {
+    createdBy?: string;
+    createdAt?: string;
+    vlan?: number | string;
+    targetManagementIp?: string;
+    configurationGuide?: string;
+    notes?: string;
+  } | null;
+  nocQcResult?: {
+    verified?: boolean;
+    verifiedBy?: string;
+    verifiedAt?: string;
+    pingTestSuccess?: boolean;
+    snmpActive?: boolean;
+    rxTxPowerDbm?: string;
+    qcNotes?: string;
+    rejectionNotes?: string;
+  } | null;
+  warehouseReturnStatus?: 'none' | 'pending_qc' | 'retur_selesai' | null;
+  createdBy: string;
+  pop?: NetworkPop;
+  createdAt?: string;
+  updatedAt?: string;
+}
+

@@ -29,6 +29,7 @@ export const MODULE_ROUTE_MAP: Record<AppModule, string> = {
   finance: '/app/finance',
   inventory: '/app/inventory',
   stok_barang: '/app/stok-barang',
+  inventory_pop: '/app/inventory-pop',
   request_pengadaan_barang: '/app/request-pengadaan-barang',
   kanban: '/app/kanban',
   network_map: '/app/network-map',
