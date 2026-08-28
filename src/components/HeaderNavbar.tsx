@@ -49,6 +49,7 @@ import { ProfileSettingsModal } from './modals/ProfileSettingsModal';
 interface HeaderNavbarProps {
   onOpenArchSpecs: () => void;
   onOpenWorkflowGuide: () => void;
+  onOpenProfileSettings?: () => void;
   onToggleSidebar: () => void;
 }
 
@@ -105,6 +106,7 @@ const shellBadgeClasses: Record<string, string> = {
 export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   onOpenArchSpecs,
   onOpenWorkflowGuide,
+  onOpenProfileSettings,
   onToggleSidebar,
 }) => {
   const {
@@ -572,7 +574,11 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                     type="button"
                     onClick={() => {
                       setIsAccountMenuOpen(false);
-                      setIsProfileModalOpen(true);
+                      if (onOpenProfileSettings) {
+                        onOpenProfileSettings();
+                      } else {
+                        setIsProfileModalOpen(true);
+                      }
                     }}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100 hover:border-emerald-300 hover:text-emerald-700 cursor-pointer"
                   >

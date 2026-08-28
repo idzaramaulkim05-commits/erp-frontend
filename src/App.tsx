@@ -54,6 +54,7 @@ import { NewProcurementModal } from './components/modals/NewProcurementModal';
 import { TicketDetailTimelineModal } from './components/modals/TicketDetailTimelineModal';
 import { ArchitectureSpecsModal } from './components/modals/ArchitectureSpecsModal';
 import { WorkflowGuideModal } from './components/modals/WorkflowGuideModal';
+import { ProfileSettingsModal } from './components/modals/ProfileSettingsModal';
 import { NotificationToastContainer } from './components/NotificationToastContainer';
 import { AppModule, TroubleTicket } from './types';
 import { LoaderCircle } from 'lucide-react';
@@ -126,6 +127,7 @@ const MainIOMSApp: React.FC = () => {
   const [isProcurementModalOpen, setIsProcurementModalOpen] = useState(false);
   const [isArchSpecsModalOpen, setIsArchSpecsModalOpen] = useState(false);
   const [isWorkflowGuideOpen, setIsWorkflowGuideOpen] = useState(false);
+  const [isProfileSettingsModalOpen, setIsProfileSettingsModalOpen] = useState(false);
   const [selectedTicketDetail, setSelectedTicketDetail] = useState<TroubleTicket | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const roleWorkspace = getRoleWorkspace(activeRole);
@@ -255,6 +257,7 @@ const MainIOMSApp: React.FC = () => {
       <HeaderNavbar
         onOpenArchSpecs={() => setIsArchSpecsModalOpen(true)}
         onOpenWorkflowGuide={() => setIsWorkflowGuideOpen(true)}
+        onOpenProfileSettings={() => setIsProfileSettingsModalOpen(true)}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
       />
 
@@ -336,6 +339,10 @@ const MainIOMSApp: React.FC = () => {
       <WorkflowGuideModal
         isOpen={isWorkflowGuideOpen}
         onClose={() => setIsWorkflowGuideOpen(false)}
+      />
+      <ProfileSettingsModal
+        isOpen={isProfileSettingsModalOpen}
+        onClose={() => setIsProfileSettingsModalOpen(false)}
       />
     </div>
   );
