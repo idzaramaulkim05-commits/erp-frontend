@@ -49,9 +49,59 @@ export type AppModule =
   | 'admin_modules'
   | 'admin_module_roles'
   | 'admin_mappings'
-  | 'admin_audit';
+  | 'admin_audit'
+  | 'performa_karyawan'
+  | 'pengaturan_profil';
 
 export type ImplementedAppModule = AppModule;
+
+export interface KpiMetric {
+  label: string;
+  value: string | number;
+  unit: string;
+}
+
+export interface EmployeeRecentActivity {
+  id: string;
+  action: string;
+  target?: string | null;
+  details?: string | null;
+  type: 'info' | 'warning' | 'error' | 'success';
+  timestamp: string;
+}
+
+export interface EmployeePerformanceItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  avatar: string;
+  role: UserRole;
+  roleTitle: string;
+  division: string;
+  isOnline: boolean;
+  lastLoginAt?: string | null;
+  kpiScore: number;
+  status: string;
+  totalAssignedTasks: number;
+  totalCompletedTasks: number;
+  activeTasksCount: number;
+  kpiMetrics: KpiMetric[];
+  recentActivities: EmployeeRecentActivity[];
+}
+
+export interface EmployeePerformanceSummary {
+  totalEmployees: number;
+  averageKpiScore: number;
+  totalCompletedTasksThisMonth: number;
+  slaPerformanceRate: string;
+  topPerformers: EmployeePerformanceItem[];
+}
+
+export interface EmployeePerformanceApiResponse {
+  summary: EmployeePerformanceSummary;
+  employees: EmployeePerformanceItem[];
+}
 
 export interface UserProfile {
   id: string;

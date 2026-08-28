@@ -43,6 +43,8 @@ import { AktivasiInstalasiView } from './components/views/AktivasiInstalasiView'
 import { RequestPengadaanBarangView } from './components/views/RequestPengadaanBarangView';
 import { StokBarangView } from './components/views/StokBarangView';
 import { InventoryPopView } from './components/views/InventoryPopView';
+import { EmployeePerformanceView } from './components/views/EmployeePerformanceView';
+import { PengaturanProfilView } from './components/views/PengaturanProfilView';
 
 // Modals
 import { NewTicketModal } from './components/modals/NewTicketModal';
@@ -239,6 +241,10 @@ const MainIOMSApp: React.FC = () => {
       case 'admin_mappings':
       case 'admin_audit':
         return <SuperadminDashboardView selectedModule={moduleId} />;
+      case 'performa_karyawan':
+        return <EmployeePerformanceView />;
+      case 'pengaturan_profil':
+        return <PengaturanProfilView />;
       default:
         return <ManagementDashboardView />;
     }
@@ -385,6 +391,8 @@ export default function App() {
             <Route path="/app/admin/module-roles" element={<MainIOMSApp />} />
             <Route path="/app/admin/mappings" element={<MainIOMSApp />} />
             <Route path="/app/admin/audit" element={<MainIOMSApp />} />
+            <Route path="/app/performa-karyawan" element={<MainIOMSApp />} />
+            <Route path="/app/pengaturan-profil" element={<MainIOMSApp />} />
             <Route path="/app/*" element={<MainIOMSApp />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   BadgeInfo,
+  BarChart3,
   Boxes,
   CheckCircle2,
   Columns,
@@ -75,6 +76,8 @@ const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>
   admin_module_roles: Columns,
   admin_mappings: Wifi,
   admin_audit: ScrollText,
+  performa_karyawan: BarChart3,
+  pengaturan_profil: UserCog,
 };
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({

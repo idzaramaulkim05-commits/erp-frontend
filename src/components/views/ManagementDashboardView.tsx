@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
   CheckCircle2,
   Receipt,
-  ArrowUpRight
+  ArrowUpRight,
+  BarChart3,
+  Users
 } from 'lucide-react';
 import { useIOMS } from '../../context/IOMSContext';
 import { ProcurementRequest } from '../../types';
@@ -24,6 +27,7 @@ type ManagementDecisionState =
   | null;
 
 export const ManagementDashboardView: React.FC = () => {
+  const navigate = useNavigate();
   const {
     customers,
     tickets,
@@ -78,8 +82,17 @@ export const ManagementDashboardView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 shrink-0">
-          <div className="text-right">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate('/app/performa-karyawan')}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer shadow-xs"
+          >
+            <Users className="h-4 w-4 text-emerald-400" />
+            <span>Lihat Performa Karyawan</span>
+          </button>
+
+          <div className="text-right border-l border-slate-100 pl-3">
             <span className="text-[10px] text-slate-400 block">Pertumbuhan Bulan Ini</span>
             <span className="text-base font-extrabold text-emerald-600 flex items-center justify-end gap-1">
               <TrendingUp className="w-4 h-4" /> +14.2% MoM

@@ -4,6 +4,7 @@ import {
   Activity,
   ArrowRight,
   BadgeInfo,
+  BarChart3,
   Bell,
   Boxes,
   CheckCircle2,
@@ -43,6 +44,7 @@ import {
   getRoleWorkspace,
 } from '../config/roleWorkspace';
 import { getDefaultRouteForRole, getRoutePathForModule } from '../routing/moduleRoutes';
+import { ProfileSettingsModal } from './modals/ProfileSettingsModal';
 
 interface HeaderNavbarProps {
   onOpenArchSpecs: () => void;
@@ -89,6 +91,8 @@ const moduleIcons: Record<AppModule, React.ComponentType<{ className?: string }>
   admin_module_roles: Columns,
   admin_mappings: Wifi,
   admin_audit: ScrollText,
+  performa_karyawan: BarChart3,
+  pengaturan_profil: UserCog,
 };
 
 const shellBadgeClasses: Record<string, string> = {
@@ -126,6 +130,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   const navigationSections = getNavigationSections(activeRole, navigationConfig);
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNotifMenuOpen, setIsNotifMenuOpen] = useState(false);
   const [navigationQuery, setNavigationQuery] = useState('');
   const navigationRef = useRef<HTMLDivElement | null>(null);
@@ -562,13 +567,26 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                     <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Divisi</div>
                     <div className="mt-1 font-semibold text-slate-800">{currentUser.division}</div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100 hover:border-emerald-300 hover:text-emerald-700 cursor-pointer"
+                  >
+                    <UserCog className="h-4 w-4 text-emerald-600" />
+                    <span>Pengaturan Profil & Sandi</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
                       setIsAccountMenuOpen(false);
                       void logout();
                     }}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 cursor-pointer"
                   >
                     <LogOut className="h-4 w-4 text-rose-300" />
                     <span>Logout</span>
@@ -579,6 +597,11 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
           </div>
         </div>
       </div>
+
+      <ProfileSettingsModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </header>
   );
 };

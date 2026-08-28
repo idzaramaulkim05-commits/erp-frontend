@@ -40,6 +40,8 @@ export const MODULE_ROUTE_MAP: Record<AppModule, string> = {
   admin_module_roles: '/app/admin/module-roles',
   admin_mappings: '/app/admin/mappings',
   admin_audit: '/app/admin/audit',
+  performa_karyawan: '/app/performa-karyawan',
+  pengaturan_profil: '/app/pengaturan-profil',
 };
 
 const ROUTE_MODULE_ENTRIES = Object.entries(MODULE_ROUTE_MAP) as Array<[AppModule, string]>;

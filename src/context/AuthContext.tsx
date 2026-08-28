@@ -13,6 +13,13 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   authFetch: <T,>(path: string, init?: RequestInit) => Promise<T>;
+  updateProfile: (data: {
+    name?: string;
+    phone?: string;
+    avatar?: string;
+    current_password?: string;
+    new_password?: string;
+  }) => Promise<UserProfile>;
   changePassword: (currentPassword: string, password: string, passwordConfirmation: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<string>;
   resetPassword: (payload: { email: string; token: string; password: string; passwordConfirmation: string }) => Promise<string>;
@@ -163,6 +170,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (data: {
+    name?: string;
+    phone?: string;
+    avatar?: string;
+    current_password?: string;
+    new_password?: string;
+  }): Promise<UserProfile> => {
+    const payload = await authFetch<{ message?: string; user?: { data?: UserProfile } | UserProfile }>('/auth/profile', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+    const nextUser = payload.user && 'data' in payload.user
+      ? payload.user.data
+      : (payload.user as UserProfile | undefined);
+
+    if (nextUser) {
+      persistAuth(token, nextUser);
+    }
+    return nextUser!;
+  };
+
   const changePassword = async (currentPassword: string, password: string, passwordConfirmation: string) => {
     await authFetch('/auth/change-password', {
       method: 'POST',
@@ -214,6 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     refreshUser,
     authFetch,
+    updateProfile,
     changePassword,
     forgotPassword,
     resetPassword,
