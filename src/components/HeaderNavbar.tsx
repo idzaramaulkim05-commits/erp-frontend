@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardList,
   ChevronDown,
+  ChevronRight,
   Columns,
   Database,
   HelpCircle,
@@ -282,7 +283,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
             {isNavigationOpen && (
               <div
-                className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 p-4 pt-16 sm:pt-20 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+                className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/40 p-4 pt-16 sm:pt-20 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
                 onClick={(e) => {
                   if (e.target === e.currentTarget) {
                     setIsNavigationOpen(false);
@@ -291,61 +292,50 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
               >
                 <div
                   ref={navigationRef}
-                  className={`w-full ${modalMaxWidthClass} overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.28)] transition-all animate-in zoom-in-95 duration-150`}
+                  className="w-full max-w-5xl overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_25px_70px_rgba(15,23,42,0.22)] transition-all animate-in zoom-in-95 duration-150"
                 >
-                  <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-                    <div className="relative flex-1 mr-4">
+                  {/* Top Search Bar */}
+                  <div className="border-b border-slate-100 px-6 py-4 bg-white">
+                    <div className="relative w-full max-w-xl mx-auto">
                       <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input
                         ref={navigationSearchRef}
                         type="text"
                         value={navigationQuery}
                         onChange={(event) => setNavigationQuery(event.target.value)}
-                        placeholder="Cari navigasi modul atau fitur..."
-                        className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                        placeholder="Search navigation..."
+                        className="h-11 w-full rounded-full border border-slate-200 bg-white pl-11 pr-10 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100/60"
                       />
                       {navigationQuery && (
                         <button
                           type="button"
                           onClick={() => setNavigationQuery('')}
-                          className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                          className="absolute right-3.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                           aria-label="Kosongkan pencarian"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsNavigationOpen(false)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition font-bold"
-                      title="Tutup Navigasi (Esc)"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
                   </div>
 
-                  <div className={`grid max-h-[70vh] ${gridColsClass} gap-4 overflow-y-auto p-5 sm:p-6`}>
+                  {/* Horizontal Scrollable Clean Columns */}
+                  <div className="flex overflow-x-auto p-6 pt-5 divide-x divide-slate-100/90 max-h-[70vh]">
                     {filteredSections.length > 0 ? (
                       filteredSections.map((section) => (
                         <div
                           key={section.id}
-                          className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/60 p-4 transition-all"
+                          className="min-w-[210px] max-w-[250px] shrink-0 px-5 first:pl-2 last:pr-2 flex flex-col space-y-3"
                         >
-                          <div className="mb-3 flex items-center justify-between border-b border-slate-200/60 pb-2.5">
-                            <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-800">
-                              {section.label}
-                            </span>
-                            <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                              {section.modules.length}
-                            </span>
+                          {/* Category Header */}
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-[#1e293b]">
+                            {section.label}
                           </div>
 
-                          <div className="space-y-1.5 flex-1">
+                          {/* Menu Items List */}
+                          <div className="space-y-1">
                             {section.modules.map((moduleMeta) => {
                               const moduleId = moduleMeta.id as AppModule;
-                              const Icon = moduleIcons[moduleId] || LayoutGrid;
                               const routeTarget = 'routeTarget' in moduleMeta ? moduleMeta.routeTarget : getRoutePathForModule(moduleId);
                               const isActive = location.pathname === routeTarget || selectedModule === moduleId;
 
@@ -354,20 +344,18 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                                   key={moduleId}
                                   type="button"
                                   onClick={() => handleSelectModule(moduleId, routeTarget)}
-                                  className={`group flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition ${
+                                  className={`group flex w-full items-center gap-2.5 py-1.5 px-2 text-left transition rounded-lg ${
                                     isActive
-                                      ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                                      : 'bg-white border border-slate-100 text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/60 hover:text-emerald-900 font-semibold'
+                                      ? 'text-indigo-600 bg-indigo-50/70 font-bold'
+                                      : 'text-slate-600 hover:text-slate-950 hover:bg-slate-50 font-normal'
                                   }`}
                                 >
-                                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+                                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition ${
                                     isActive
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700'
-                                  }`}>
-                                    <Icon className="h-4 w-4" />
-                                  </span>
-                                  <span className="min-w-0 flex-1 truncate text-xs">
+                                      ? 'text-indigo-600'
+                                      : 'text-slate-300 group-hover:text-slate-600 group-hover:translate-x-0.5'
+                                  }`} />
+                                  <span className="truncate text-[12.5px] leading-relaxed">
                                     {moduleMeta.label}
                                   </span>
                                 </button>
@@ -377,20 +365,10 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                         </div>
                       ))
                     ) : (
-                      <div className="col-span-full flex min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
-                        <div>
-                          <div className="text-sm font-bold text-slate-800">Menu tidak ditemukan</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            Coba kata kunci lain untuk mencari workspace atau fitur yang diizinkan untuk role ini.
-                          </div>
-                        </div>
+                      <div className="w-full flex min-h-[180px] items-center justify-center p-6 text-center text-slate-400 text-xs">
+                        Tidak ada menu navigasi yang cocok dengan "{navigationQuery}".
                       </div>
                     )}
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-6 py-3 text-xs text-slate-500">
-                    <span>{currentUser?.name} ({roleWorkspace.title})</span>
-                    <span className="text-[11px] font-mono text-slate-400">Tekan Esc untuk menutup</span>
                   </div>
                 </div>
               </div>
