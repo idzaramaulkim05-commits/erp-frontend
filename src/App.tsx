@@ -46,6 +46,20 @@ import { InventoryPopView } from './components/views/InventoryPopView';
 import { EmployeePerformanceView } from './components/views/EmployeePerformanceView';
 import { PengaturanProfilView } from './components/views/PengaturanProfilView';
 
+// 12 New Modular Views
+import { RouterManagementView } from './components/views/RouterManagementView';
+import { OltMonitoringView } from './components/views/OltMonitoringView';
+import { OdpManagementView } from './components/views/OdpManagementView';
+import { PaketInternetView } from './components/views/PaketInternetView';
+import { MasterWilayahView } from './components/views/MasterWilayahView';
+import { DataSheetPelangganView } from './components/views/DataSheetPelangganView';
+import { SyncCheckView } from './components/views/SyncCheckView';
+import { CustomerPackageRequestsView } from './components/views/CustomerPackageRequestsView';
+import { WarehouseManagementView } from './components/views/WarehouseManagementView';
+import { ComprehensiveTicketsView } from './components/views/ComprehensiveTicketsView';
+import { SettingsIspView } from './components/views/SettingsIspView';
+import { ActivityLogsView } from './components/views/ActivityLogsView';
+
 // Modals
 import { NewTicketModal } from './components/modals/NewTicketModal';
 import { NewCustomerModal } from './components/modals/NewCustomerModal';
@@ -235,6 +249,32 @@ const MainIOMSApp: React.FC = () => {
         );
       case 'network_map':
         return <NetworkMappingView />;
+      case 'router_management':
+        return <RouterManagementView />;
+      case 'olt_monitoring':
+        return <OltMonitoringView />;
+      case 'odp_management':
+        return <OdpManagementView />;
+      case 'paket_internet':
+        return <PaketInternetView />;
+      case 'master_wilayah':
+        return <MasterWilayahView />;
+      case 'datasheet_360':
+        return <DataSheetPelangganView />;
+      case 'sync_check':
+        return <SyncCheckView />;
+      case 'package_requests':
+        return <CustomerPackageRequestsView />;
+      case 'billing_invoices':
+        return <FinanceBillingView />;
+      case 'warehouse_management':
+        return <WarehouseManagementView />;
+      case 'comprehensive_tickets':
+        return <ComprehensiveTicketsView />;
+      case 'settings_isp':
+        return <SettingsIspView />;
+      case 'activity_logs':
+        return <ActivityLogsView />;
       case 'admin_users':
       case 'admin_roles':
       case 'admin_master':

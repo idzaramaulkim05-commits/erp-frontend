@@ -43,6 +43,19 @@ export type AppModule =
   | 'request_pengadaan_barang'
   | 'kanban'
   | 'network_map'
+  | 'router_management'
+  | 'olt_monitoring'
+  | 'odp_management'
+  | 'paket_internet'
+  | 'master_wilayah'
+  | 'datasheet_360'
+  | 'sync_check'
+  | 'billing_invoices'
+  | 'package_requests'
+  | 'warehouse_management'
+  | 'comprehensive_tickets'
+  | 'settings_isp'
+  | 'activity_logs'
   | 'admin_users'
   | 'admin_roles'
   | 'admin_master'
@@ -917,4 +930,422 @@ export interface PopWorkOrder {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// ==========================================
+// 12 CORE DOMAIN INTERFACES FOR PARITY
+// ==========================================
+
+export interface RouterDevice {
+  id: number;
+  name: string;
+  ip_address: string;
+  username: string;
+  port: number;
+  type: string;
+  is_active: boolean;
+  status: 'connected' | 'disconnected' | 'error';
+  last_seen?: string | null;
+  latency_ms?: number | null;
+  cpu_load?: number | null;
+  memory_used_mb?: number | null;
+  memory_total_mb?: number | null;
+  uptime?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RouterTelemetry {
+  online: boolean;
+  cpu_load?: number;
+  memory_free?: number;
+  memory_total?: number;
+  memory_used_pct?: number;
+  uptime?: string;
+  board_name?: string;
+  version?: string;
+  active_pppoe_count?: number;
+  interfaces?: Array<{
+    name: string;
+    type: string;
+    running: boolean;
+    rx_bps?: number;
+    tx_bps?: number;
+    rx_packet?: number;
+    tx_packet?: number;
+  }>;
+}
+
+export interface PppoeSecretItem {
+  name: string;
+  service?: string;
+  profile?: string;
+  caller_id?: string;
+  disabled: boolean;
+  comment?: string;
+  is_active?: boolean;
+  active_uptime?: string;
+  active_ip?: string;
+  active_mac?: string;
+}
+
+export interface BackboneDiagnostics {
+  interface: string;
+  status: 'up' | 'down';
+  sfp_temperature?: number;
+  sfp_voltage?: number;
+  sfp_tx_power_dbm?: number;
+  sfp_rx_power_dbm?: number;
+  optical_status?: 'normal' | 'warning' | 'critical';
+  rx_bps?: number;
+  tx_bps?: number;
+}
+
+export interface OltDevice {
+  id: number;
+  name: string;
+  brand: string;
+  type: 'gpon' | 'epon';
+  ip_address: string;
+  snmp_port?: number;
+  snmp_community?: string;
+  telnet_port?: number;
+  telnet_username?: string;
+  status: 'online' | 'offline' | 'unreachable';
+  total_pon_ports: number;
+  active_pon_ports?: number;
+  total_onus?: number;
+  online_onus?: number;
+  offline_onus?: number;
+  temperature?: number | null;
+  last_synced_at?: string | null;
+  pon_ports?: OltPonPort[];
+}
+
+export interface OltPonPort {
+  id?: number;
+  port_number: number;
+  name: string;
+  status: 'up' | 'down';
+  tx_power_dbm?: number;
+  rx_power_avg_dbm?: number;
+  connected_onus_count: number;
+  temperature?: number;
+  voltage?: number;
+}
+
+export interface OltOnuItem {
+  id?: number;
+  onu_index?: string;
+  port: number;
+  onu_number?: number;
+  serial_number: string;
+  name?: string;
+  status: 'online' | 'offline' | 'los' | 'dying_gasp';
+  rx_power_dbm?: number;
+  tx_power_dbm?: number;
+  distance_meters?: number;
+  ip_address?: string;
+  mac_address?: string;
+  optical_status: 'normal' | 'warning' | 'critical';
+  last_online_at?: string;
+}
+
+export interface OdpDistributionItem {
+  id: number;
+  nama_odp: string;
+  kode_odp?: string;
+  olt_id?: number;
+  olt_name?: string;
+  pon_port?: number;
+  kapasitas_port: number;
+  used_ports?: number;
+  latitude: number;
+  longitude: number;
+  status: 'normal' | 'fiber_cut' | 'power_off' | 'mati_lampu' | 'redaman_tinggi';
+  alamat?: string;
+  catatan?: string;
+  foto_odp?: string;
+  updated_at?: string;
+}
+
+export interface PaketInternetItem {
+  id: number;
+  nama_paket: string;
+  kategori?: string;
+  kecepatan_mbps: number;
+  tarif_bulanan: number;
+  mikrotik_profile?: string;
+  keterangan?: string;
+  is_active: boolean;
+  total_subscribers?: number;
+}
+
+export interface MasterWilayahItem {
+  id: number;
+  provinsi_kode: string;
+  provinsi_nama: string;
+  kabupaten_kode: string;
+  kabupaten_nama: string;
+  kecamatan_kode: string;
+  kecamatan_nama: string;
+  desa_kode: string;
+  desa_nama: string;
+}
+
+export interface CustomerIdGenerationResult {
+  customer_id: string;
+  pppoe_username: string;
+  pppoe_password_suggestion: string;
+  wilayah_code: string;
+}
+
+export interface DataSheetItem {
+  id: number;
+  username_pppoe: string;
+  nama_pelanggan: string;
+  nik_ktp?: string | null;
+  telepon?: string | null;
+  alamat?: string | null;
+  nama_odp?: string | null;
+  port_odp?: string | null;
+  olt_server?: string | null;
+  paket?: string | null;
+  harga_paket?: number | null;
+  biaya_pasang?: number | null;
+  tanggal_instalasi?: string | null;
+  tanggal_jatuh_tempo?: string | null;
+  status_langganan: 'aktif' | 'isolir' | 'dismantle' | 'batal' | string;
+  status_pembayaran?: string | null;
+  ip_address?: string | null;
+  mac_address?: string | null;
+  pon_sn?: string | null;
+  serial_number?: string | null;
+  vlan?: string | null;
+  lokasi_maps?: string | null;
+  sales_name?: string | null;
+  foto_rumah_url?: string | null;
+  foto_odp_url?: string | null;
+  foto_modem_url?: string | null;
+  foto_redaman_url?: string | null;
+  foto_ktp_url?: string | null;
+  foto_label_kabel_url?: string | null;
+  foto_dokumen_url?: string | null;
+  raw_data?: any;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SyncCheckAuditRow {
+  key: string;
+  username_pppoe: string;
+  nama: string;
+  odp: string;
+  paket: string;
+  status_db: string;
+  status_mikrotik?: string;
+  status_sheet?: string;
+  in_sync: boolean;
+  discrepancy_details?: string[];
+}
+
+export interface InvoiceItem {
+  id: number;
+  nomor_invoice: string;
+  pelanggan_username: string;
+  nama_pelanggan?: string;
+  periode_bulan: number;
+  periode_tahun: number;
+  periode_formatted?: string;
+  harga_paket: number;
+  total_tagihan: number;
+  total_dibayar: number;
+  sisa_piutang: number;
+  status_bayar: 'unpaid' | 'paid' | 'partial' | 'cancelled';
+  status_layanan: 'active' | 'isolated' | 'dismantled';
+  jatuh_tempo?: string;
+  dibayar_pada?: string | null;
+  metode_bayar?: string | null;
+  bukti_bayar?: string | null;
+  bukti_bayar_resolved?: string | null;
+  catatan?: string | null;
+  whatsapp_sent_at?: string | null;
+}
+
+export interface CustomerPackageRequestItem {
+  id: number;
+  pelanggan_username: string;
+  nama_pelanggan?: string;
+  current_package?: string;
+  requested_package: string;
+  requested_price: number;
+  reason?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  approved_by?: string | null;
+  approved_at?: string | null;
+  created_at?: string;
+}
+
+export interface WarehouseItemModel {
+  id: number;
+  kode_barang: string;
+  nama_barang: string;
+  kategori: string;
+  satuan: string;
+  stok_baru: number;
+  stok_second: number;
+  stok_rusak: number;
+  stok_total: number;
+  min_stok: number;
+  harga_satuan?: number;
+  foto?: string;
+  status: 'aktif' | 'nonaktif';
+}
+
+export interface WarehouseRequestModel {
+  id: number;
+  nomor_request: string;
+  tipe_request: string;
+  kategori_kebutuhan: string;
+  ticket_id?: number | null;
+  user_id: number;
+  user_name?: string;
+  divisi: string;
+  alasan?: string;
+  alokasi_aset?: string;
+  status: 'pending_divisi' | 'pending_finance' | 'pending_gudang' | 'approved_ready' | 'received' | 'rejected';
+  items?: Array<{
+    id: number;
+    warehouse_item_id: number;
+    nama_barang: string;
+    qty_diminta: number;
+    qty_disetujui: number;
+    kondisi: 'baru' | 'second';
+  }>;
+  created_at?: string;
+}
+
+export interface WarehouseReturnModel {
+  id: number;
+  nomor_retur: string;
+  ticket_id?: number | null;
+  ticket_number?: string | null;
+  teknisi_id: number;
+  teknisi_name?: string;
+  pelanggan_nama?: string;
+  nama_barang: string;
+  serial_number?: string;
+  mac_address?: string;
+  kondisi: 'layak_pakai' | 'rusak_bisa_servis' | 'rusak_total';
+  foto_barang?: string;
+  foto_barang_resolved?: string;
+  status: 'pending_gudang' | 'received' | 'rejected';
+  catatan_teknisi?: string;
+  catatan_gudang?: string;
+  created_at?: string;
+}
+
+export interface ComprehensiveTicketItem {
+  id: number;
+  ticket_number: string;
+  type: 'gangguan' | 'psb' | 'dismantle' | 'relokasi';
+  type_label?: string;
+  status: string;
+  status_label?: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  pelanggan_nama: string;
+  pelanggan_username?: string;
+  pelanggan_telepon?: string;
+  pelanggan_alamat?: string;
+  keluhan?: string;
+  paket?: string;
+  paket_layanan?: string;
+  odp_id?: number;
+  nama_odp?: string;
+  port_odp?: string;
+  olt_id?: number;
+  nama_olt?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  shareloc_url?: string;
+  assigned_to?: number | null;
+  technician_name?: string;
+  created_by?: number;
+  creator_name?: string;
+  validated_by?: number;
+  validator_name?: string;
+  vlan?: string;
+  ip_address?: string;
+  serial_number_ont?: string;
+  mac_ont?: string;
+  redaman_ont?: string;
+  foto_rumah?: string;
+  foto_sebelum?: string;
+  foto_sesudah?: string;
+  foto_odp?: string;
+  foto_redaman?: string;
+  foto_label_kabel?: string;
+  foto_dokumen?: string;
+  bukti_pembayaran?: string;
+  foto_rumah_resolved?: string;
+  foto_sebelum_resolved?: string;
+  foto_sesudah_resolved?: string;
+  foto_odp_resolved?: string;
+  foto_redaman_resolved?: string;
+  foto_label_kabel_resolved?: string;
+  foto_dokumen_resolved?: string;
+  bukti_pembayaran_resolved?: string;
+  biaya_instalasi?: number;
+  payment_status?: string;
+  payment_method?: string;
+  created_at?: string;
+  updated_at?: string;
+  resolved_at?: string;
+  closed_at?: string;
+}
+
+export interface TicketLiveCheckResponse {
+  total_active_tickets: number;
+  pending_noc_count: number;
+  ready_dispatch_count: number;
+  in_progress_count: number;
+  pending_qc_count: number;
+  pending_gudang_count: number;
+  last_ticket_id: number;
+  latest_ticket?: ComprehensiveTicketItem | null;
+  server_timestamp: string;
+}
+
+export interface IspSettingModel {
+  id?: number;
+  nama_isp?: string;
+  logo_url?: string;
+  telepon_support?: string;
+  alamat_kantor?: string;
+  mikrotik_ip?: string;
+  mikrotik_user?: string;
+  mikrotik_port?: number;
+  mikrotik_interface_wan?: string;
+  mikrotik_interface_pppoe?: string;
+  fonnte_token?: string;
+  fonnte_group_noc?: string;
+  fonnte_group_teknisi?: string;
+  fonnte_group_billing?: string;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
+  google_sheet_url?: string;
+  google_sheet_webhook_url?: string;
+  sheet_tab_pelanggan_fix?: string;
+}
+
+export interface ActivityLogItem {
+  id: number;
+  level: 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG';
+  action: string;
+  description: string;
+  username: string;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
 
