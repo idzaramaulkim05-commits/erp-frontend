@@ -2,15 +2,29 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowRight,
+  Check,
+  CheckCircle2,
   Database,
+  Eye,
+  EyeOff,
+  Filter,
+  FolderTree,
+  Grid3X3,
+  HelpCircle,
+  Info,
   KeyRound,
   Layers3,
+  LayoutGrid,
   Network,
   Plus,
   RefreshCw,
   Save,
+  Search,
   Server,
+  Shield,
   ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
   Trash2,
   Users,
   Wifi,
@@ -222,6 +236,104 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
   const [editingModule, setEditingModule] = useState<AdminModule | null>(null);
   const [moduleForm, setModuleForm] = useState(defaultModuleForm);
   const [moduleFormErrors, setModuleFormErrors] = useState(defaultModuleFormErrors);
+
+  // Enhanced Module & Role Mapping State
+  const [activeModuleTab, setActiveModuleTab] = useState<'hierarchy' | 'matrix' | 'categories'>('hierarchy');
+  const [moduleSearchFilter, setModuleSearchFilter] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState('all');
+
+  const toggleRoleModule = (targetRole: string, moduleKey: string, nextVisible: boolean) => {
+    setMappingDrafts((state) => {
+      const current = state[targetRole] ?? roleModuleMappings.filter((m) => m.role === targetRole);
+      const existing = current.find((m) => m.moduleKey === moduleKey);
+      const withoutCurrent = current.filter((m) => m.moduleKey !== moduleKey);
+      return {
+        ...state,
+        [targetRole]: [
+          ...withoutCurrent,
+          {
+            role: targetRole as RoleMeta['role'],
+            moduleKey: moduleKey as AppModule,
+            isVisible: nextVisible,
+            orderOverride: existing?.orderOverride ?? null,
+          },
+        ],
+      };
+    });
+  };
+
+  const setAllModulesForRole = (targetRole: string, visible: boolean) => {
+    setMappingDrafts((state) => {
+      const nextList: RoleModuleMapping[] = adminModules.map((mod) => ({
+        role: targetRole as RoleMeta['role'],
+        moduleKey: mod.key as AppModule,
+        isVisible: visible,
+        orderOverride: mod.order,
+      }));
+      return {
+        ...state,
+        [targetRole]: nextList,
+      };
+    });
+  };
+
+  const getRolesWithAccess = (moduleKey: string) => {
+    return roles
+      .filter((r) => r.role !== 'superadmin')
+      .filter((r) => {
+        const draftList = mappingDrafts[r.role];
+        if (draftList) {
+          const item = draftList.find((m) => m.moduleKey === moduleKey);
+          return item ? item.isVisible : false;
+        }
+        const existing = roleModuleMappings.find((m) => m.role === r.role && m.moduleKey === moduleKey);
+        return existing?.isVisible ?? false;
+      });
+  };
+
+  const isRolePermitted = (roleKey: string, moduleKey: string) => {
+    const draftList = mappingDrafts[roleKey];
+    if (draftList) {
+      const item = draftList.find((m) => m.moduleKey === moduleKey);
+      return item ? item.isVisible : false;
+    }
+    const existing = roleModuleMappings.find((m) => m.role === roleKey && m.moduleKey === moduleKey);
+    return existing?.isVisible ?? false;
+  };
+
+  const saveAllRoleModuleMappings = async () => {
+    setIsLoading(true);
+    setError(null);
+    setFeedback(null);
+    try {
+      const rolesToSave = Object.keys(mappingDrafts);
+      if (rolesToSave.length === 0) {
+        setFeedback('Tidak ada perubahan mapping yang perlu disimpan.');
+        setIsLoading(false);
+        return;
+      }
+      for (const roleKey of rolesToSave) {
+        const drafts = mappingDrafts[roleKey] ?? [];
+        await authFetch(`/admin/module-role-mappings/${roleKey}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            mappings: drafts.map((mapping) => ({
+              module_key: mapping.moduleKey,
+              is_visible: mapping.isVisible,
+              order_override: mapping.orderOverride ?? null,
+            })),
+          }),
+        });
+      }
+      setFeedback(`Berhasil menyimpan mapping hak akses untuk ${rolesToSave.length} role!`);
+      await loadAdminData();
+    } catch (err: any) {
+      setError(err.message || 'Gagal menyimpan mapping role.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const loadAdminData = async () => {
     setIsLoading(true);
@@ -1241,276 +1353,583 @@ export const SuperadminDashboardView: React.FC<SuperadminDashboardViewProps> = (
     </div>
   );
 
-  const renderModuleMaster = () => (
-    <div className="space-y-6">
-      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h3 className="text-lg font-black text-slate-950">Kepala Navigasi</h3>
-            <p className="text-sm text-slate-500">Struktur kepala navigasi yang membungkus modul-modul di navbar.</p>
+  const renderModuleMaster = () => {
+    // Filter modules based on search, category, and role filters
+    const filteredModules = adminModules.filter((mod) => {
+      const q = moduleSearchFilter.toLowerCase();
+      const matchSearch =
+        !q ||
+        mod.label.toLowerCase().includes(q) ||
+        mod.key.toLowerCase().includes(q) ||
+        mod.routeTarget.toLowerCase().includes(q) ||
+        mod.navigationHeadKey.toLowerCase().includes(q);
+
+      const matchCategory = selectedCategoryFilter === 'all' || mod.navigationHeadKey === selectedCategoryFilter;
+
+      let matchRole = true;
+      if (selectedRoleFilter !== 'all') {
+        matchRole = isRolePermitted(selectedRoleFilter, mod.key);
+      }
+
+      return matchSearch && matchCategory && matchRole;
+    });
+
+    const unsavedChangesCount = Object.keys(mappingDrafts).length;
+
+    return (
+      <div className="space-y-6">
+        {/* Step-by-Step Workflow Guide Banner */}
+        <div className="rounded-[28px] border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-white p-6 shadow-xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs uppercase tracking-wider">
+                <Sparkles className="h-4 w-4 text-emerald-600" />
+                <span>Panduan Manajemen Modul & Hak Akses Role</span>
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900">
+                Alur Praktis Pengelolaan Navigasi & Izin Akses Pengguna
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openCreateModule}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition shadow-xs cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Tambah Modul Baru</span>
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={addNavigationHeadDraft}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
-            >
-              <Plus className="h-4 w-4 text-emerald-600" />
-              <span>Tambah Head</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveNavigationHeads()}
-              disabled={!canSaveNavigationHeads}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 cursor-pointer shadow-xs"
-            >
-              <Save className="h-4 w-4 text-emerald-400" />
-              <span>Simpan Head</span>
-            </button>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 border-t border-emerald-100/80 text-xs">
+            <div className="flex items-start gap-2.5 p-2 rounded-xl bg-white/70 border border-emerald-100">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 font-bold text-[10px] text-white">1</span>
+              <div>
+                <p className="font-bold text-slate-800">1. Kategori / Kepala Navigasi</p>
+                <p className="text-slate-500 text-[11px]">Kelompokkan menu (misal: Jaringan, Operasional, Keuangan).</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 p-2 rounded-xl bg-white/70 border border-emerald-100">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-600 font-bold text-[10px] text-white">2</span>
+              <div>
+                <p className="font-bold text-slate-800">2. Modul & Target URL</p>
+                <p className="text-slate-500 text-[11px]">Tentukan nama modul, deskripsi, dan rute internal (/app/...).</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 p-2 rounded-xl bg-white/70 border border-emerald-100">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 font-bold text-[10px] text-white">3</span>
+              <div>
+                <p className="font-bold text-slate-800">3. Mapping Hak Akses Role</p>
+                <p className="text-slate-500 text-[11px]">Centang role mana saja yang berhak melihat modul ini di navigasi.</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {currentHeadDrafts.length === 0 ? (
-          <div className="mt-5 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-            <p className="text-base font-bold text-slate-900">Belum ada kepala navigasi</p>
-            <p className="mt-2 text-sm text-slate-500">
-              Tambahkan minimal satu kepala navigasi sebelum menyimpan struktur navbar.
-            </p>
+        {/* Tab Selector & Control Toolbar */}
+        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            {/* Tab Buttons */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveModuleTab('hierarchy')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  activeModuleTab === 'hierarchy'
+                    ? 'bg-white text-emerald-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FolderTree className="h-4 w-4 text-emerald-600" />
+                <span>Struktur Modul & Kategori</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModuleTab('matrix')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  activeModuleTab === 'matrix'
+                    ? 'bg-white text-emerald-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Grid3X3 className="h-4 w-4 text-indigo-600" />
+                <span>Matriks Hak Akses Role</span>
+                {unsavedChangesCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
+                    {unsavedChangesCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModuleTab('categories')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  activeModuleTab === 'categories'
+                    ? 'bg-white text-emerald-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers3 className="h-4 w-4 text-purple-600" />
+                <span>Kelola Kepala Navigasi</span>
+              </button>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex items-center gap-2">
+              {activeModuleTab === 'matrix' && unsavedChangesCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void saveAllRoleModuleMappings()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition shadow-xs cursor-pointer animate-pulse"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  <span>Simpan Perubahan Matriks ({unsavedChangesCount})</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void loadAdminData()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh Data</span>
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="mt-5 space-y-3">
-            {headDraftEntries.map(([headKey, head]) => {
-              const isNewHeadDraft = headKey.startsWith('draft_head_');
-              return (
-                <div key={headKey} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4 items-end">
-                  <label className="block space-y-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Key</span>
-                    <input
-                      value={head.key}
-                      readOnly={!isNewHeadDraft}
-                      onChange={(event) => {
-                        if (!isNewHeadDraft) return;
-                        setHeadDrafts((state) => ({
-                          ...state,
-                          [headKey]: { ...head, key: normalizeNavigationHeadKey(event.target.value) },
-                        }));
-                      }}
-                      className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono font-bold ${!isNewHeadDraft ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Label</span>
-                    <input
-                      value={head.label}
-                      onChange={(event) => {
-                        setHeadDrafts((state) => ({
-                          ...state,
-                          [headKey]: { ...head, label: event.target.value },
-                        }));
-                      }}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Order</span>
-                    <input
-                      type="number"
-                      value={head.order}
-                      onChange={(event) => {
-                        setHeadDrafts((state) => ({
-                          ...state,
-                          [headKey]: { ...head, order: Number(event.target.value) },
-                        }));
-                      }}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
-                    />
-                  </label>
-                  <div className="flex items-center justify-between gap-2 pb-1">
-                    <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+
+          {/* Search & Filter Bar (Available for Hierarchy & Matrix Tabs) */}
+          {activeModuleTab !== 'categories' && (
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative flex-1 w-full">
+                <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama modul, key, target URL (/app/...), atau kategori..."
+                  value={moduleSearchFilter}
+                  onChange={(e) => setModuleSearchFilter(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-500 focus:bg-white transition"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none"
+                >
+                  <option value="all">Semua Kategori ({navigationHeads.length})</option>
+                  {navigationHeads.map((h) => (
+                    <option key={h.key} value={h.key}>{h.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedRoleFilter}
+                  onChange={(e) => setSelectedRoleFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none"
+                >
+                  <option value="all">Semua Role</option>
+                  {roles.map((r) => (
+                    <option key={r.role} value={r.role}>{r.roleTitle || r.role}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* TAB 1: STRUKTUR MODUL & KATEGORI (HIERARCHY VIEW) */}
+        {activeModuleTab === 'hierarchy' && (
+          <div className="space-y-6">
+            {navigationHeads
+              .slice()
+              .sort((a, b) => a.order - b.order)
+              .filter((head) => selectedCategoryFilter === 'all' || head.key === selectedCategoryFilter)
+              .map((head) => {
+                const modulesInHead = filteredModules
+                  .filter((m) => m.navigationHeadKey === head.key)
+                  .sort((a, b) => a.order - b.order);
+
+                if (modulesInHead.length === 0 && selectedCategoryFilter === 'all' && moduleSearchFilter) {
+                  return null;
+                }
+
+                return (
+                  <div key={head.key} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+                    {/* Category Header */}
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 font-bold">
+                          <Layers3 className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-slate-900">{head.label}</h4>
+                            <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                              key: {head.key}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">Urutan di Navbar: #{head.order}</p>
+                        </div>
+                      </div>
+
+                      <span className="rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-xs font-bold">
+                        {modulesInHead.length} Modul
+                      </span>
+                    </div>
+
+                    {/* Modules Grid */}
+                    {modulesInHead.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {modulesInHead.map((mod) => {
+                          const permittedRoles = getRolesWithAccess(mod.key);
+
+                          return (
+                            <div
+                              key={mod.key}
+                              className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 hover:bg-slate-50 hover:border-slate-300 transition"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-900">{mod.label}</span>
+                                    {mod.showInNavbar ? (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                        NAVBAR
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-600">
+                                        HIDDEN
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 line-clamp-1">{mod.description || 'Tidak ada deskripsi'}</p>
+                                  <p className="font-mono text-[10px] font-semibold text-indigo-600">{mod.routeTarget}</p>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditModule(mod)}
+                                    className="p-1.5 bg-white hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition cursor-pointer"
+                                    title="Edit Modul"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteModule(mod)}
+                                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold border border-rose-200 transition cursor-pointer"
+                                    title="Hapus Modul"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Permitted Roles Badge Row */}
+                              <div className="pt-2 border-t border-slate-200/60 space-y-1">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  Role yang Memiliki Izin Akses ({permittedRoles.length}):
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-800">
+                                    Superadmin
+                                  </span>
+                                  {permittedRoles.map((r) => (
+                                    <span
+                                      key={r.role}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60"
+                                    >
+                                      {r.roleTitle || r.role}
+                                    </span>
+                                  ))}
+                                  {permittedRoles.length === 0 && (
+                                    <span className="text-[10px] text-slate-400 italic">
+                                      Hanya Superadmin (Role lain belum dimapping)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                        Tidak ada modul di bawah kategori ini.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        {/* TAB 2: MATRIKS HAK AKSES ROLE (2D MATRIX VIEW) */}
+        {activeModuleTab === 'matrix' && (
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900">Matriks Izin Akses Modul per Role</h4>
+                <p className="text-xs text-slate-500">
+                  Centang kotak untuk memberikan izin akses modul ke role terkait. Klik tombol "Simpan Perubahan" di atas untuk menerapkan.
+                </p>
+              </div>
+
+              {/* Quick Preset Selector for active role */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Aksi Cepat Role:</span>
+                <select
+                  value={selectedMappingRole}
+                  onChange={(e) => setSelectedMappingRole(e.target.value as RoleMeta['role'])}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                >
+                  {nonSuperadminRoles.map((r) => (
+                    <option key={r.role} value={r.role}>{r.roleTitle || r.role}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setAllModulesForRole(selectedMappingRole, true)}
+                  className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold border border-emerald-200 transition cursor-pointer"
+                >
+                  Centang Semua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllModulesForRole(selectedMappingRole, false)}
+                  className="px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold border border-rose-200 transition cursor-pointer"
+                >
+                  Kosongkan
+                </button>
+              </div>
+            </div>
+
+            {/* Matrix Table */}
+            <div className="overflow-x-auto border border-slate-200 rounded-2xl max-h-[65vh]">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+                  <tr>
+                    <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] min-w-[240px] sticky left-0 z-20 bg-slate-900 border-r border-slate-800">
+                      Modul / Halaman Fitur
+                    </th>
+                    <th className="py-3 px-3 font-bold uppercase tracking-wider text-[11px] text-center min-w-[100px] border-r border-slate-800 bg-purple-950 text-purple-200">
+                      Superadmin
+                    </th>
+                    {nonSuperadminRoles.map((role) => (
+                      <th
+                        key={role.role}
+                        className={`py-3 px-3 font-bold uppercase tracking-wider text-[11px] text-center min-w-[130px] border-r border-slate-800 ${
+                          selectedMappingRole === role.role ? 'bg-indigo-900 text-indigo-200' : ''
+                        }`}
+                      >
+                        <div className="truncate max-w-[140px] mx-auto">{role.roleTitle || role.role}</div>
+                        <div className="text-[9px] font-mono text-slate-400 font-normal">{role.role}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {navigationHeads.map((head) => {
+                    const modulesInHead = filteredModules.filter((m) => m.navigationHeadKey === head.key);
+                    if (modulesInHead.length === 0) return null;
+
+                    return (
+                      <React.Fragment key={head.key}>
+                        {/* Section Header Row */}
+                        <tr className="bg-slate-100/90 font-extrabold text-slate-800">
+                          <td colSpan={2 + nonSuperadminRoles.length} className="py-2.5 px-4 text-xs uppercase tracking-wider text-emerald-900 bg-emerald-50/70 border-y border-emerald-200">
+                            📂 {head.label} ({modulesInHead.length} modul)
+                          </td>
+                        </tr>
+
+                        {/* Module Rows */}
+                        {modulesInHead.map((mod) => (
+                          <tr key={mod.key} className="hover:bg-slate-50 transition">
+                            {/* Module Name & Route */}
+                            <td className="py-2.5 px-4 font-medium text-slate-800 sticky left-0 z-10 bg-white border-r border-slate-200">
+                              <div className="font-bold text-xs text-slate-900">{mod.label}</div>
+                              <div className="font-mono text-[10px] text-slate-400 flex items-center gap-1">
+                                <span>{mod.routeTarget}</span>
+                              </div>
+                            </td>
+
+                            {/* Superadmin always has access */}
+                            <td className="py-2.5 px-3 text-center border-r border-slate-200 bg-purple-50/30">
+                              <span className="inline-flex items-center justify-center h-5 w-5 rounded-md bg-purple-600 text-white text-xs">
+                                ✓
+                              </span>
+                            </td>
+
+                            {/* Role Permission Checkboxes */}
+                            {nonSuperadminRoles.map((role) => {
+                              const checked = isRolePermitted(role.role, mod.key);
+
+                              return (
+                                <td
+                                  key={role.role}
+                                  className={`py-2.5 px-3 text-center border-r border-slate-200 ${
+                                    selectedMappingRole === role.role ? 'bg-indigo-50/40' : ''
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => toggleRoleModule(role.role, mod.key, e.target.checked)}
+                                    title={`Akses ${mod.label} untuk role ${role.roleTitle || role.role}`}
+                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  />
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: KELOLA KEPALA NAVIGASI (CATEGORIES VIEW) */}
+        {activeModuleTab === 'categories' && (
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900">Kelola Kepala Navigasi (Category Heads)</h4>
+                <p className="text-xs text-slate-500">
+                  Kepala navigasi adalah grup header utama di menu navbar yang membungkus modul-modul terkait.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addNavigationHeadDraft}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <Plus className="h-4 w-4 text-emerald-600" />
+                  <span>Tambah Kategori Baru</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void saveNavigationHeads()}
+                  disabled={!canSaveNavigationHeads}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 px-4 py-2 text-xs font-bold text-white transition disabled:opacity-40 cursor-pointer shadow-xs"
+                >
+                  <Save className="h-4 w-4 text-emerald-400" />
+                  <span>Simpan Perubahan Kategori</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {headDraftEntries.map(([headKey, head]) => {
+                const isNewHeadDraft = headKey.startsWith('draft_head_');
+                return (
+                  <div key={headKey} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4 items-end">
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Key Kategori</span>
                       <input
-                        type="checkbox"
-                        checked={head.isActive}
+                        value={head.key}
+                        readOnly={!isNewHeadDraft}
+                        onChange={(event) => {
+                          if (!isNewHeadDraft) return;
+                          setHeadDrafts((state) => ({
+                            ...state,
+                            [headKey]: { ...head, key: normalizeNavigationHeadKey(event.target.value) },
+                          }));
+                        }}
+                        className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono font-bold ${
+                          !isNewHeadDraft ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                        }`}
+                      />
+                    </label>
+
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nama Label</span>
+                      <input
+                        value={head.label}
                         onChange={(event) => {
                           setHeadDrafts((state) => ({
                             ...state,
-                            [headKey]: { ...head, isActive: event.target.checked },
+                            [headKey]: { ...head, label: event.target.value },
                           }));
                         }}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"
                       />
-                      Aktif
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeadDrafts((state) => {
-                          const next = { ...state };
-                          delete next[headKey];
-                          return next;
-                        });
-                      }}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h3 className="text-lg font-black text-slate-950">Daftar Modul Navigasi</h3>
-            <p className="text-sm text-slate-500">Kelola metadata modul, kepala navigasi, dan target route aplikasi.</p>
-          </div>
-          <button
-            type="button"
-            onClick={openCreateModule}
-            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            Tambah Modul
-          </button>
-        </div>
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Urutan (Order)</span>
+                      <input
+                        type="number"
+                        value={head.order}
+                        onChange={(event) => {
+                          setHeadDrafts((state) => ({
+                            ...state,
+                            [headKey]: { ...head, order: Number(event.target.value) },
+                          }));
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                      />
+                    </label>
 
-        <div className="mt-5 space-y-3">
-          {adminModules.map((module) => (
-            <div key={module.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">{module.key}</span>
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{module.navigationHeadKey}</span>
-                  </div>
-                  <h4 className="mt-1 text-base font-bold text-slate-950">{module.label}</h4>
-                  <p className="text-xs text-slate-500">{module.description}</p>
-                  <p className="mt-1 text-xs font-mono text-slate-600">{module.routeTarget}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openEditModule(module)}
-                    className="rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void deleteModule(module)}
-                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Hapus</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderModuleToRole = () => (
-    <div className="space-y-6">
-      <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h3 className="text-lg font-black text-slate-950">Mapping Modul terhadap Role</h3>
-            <p className="text-sm text-slate-500">Pilih role, lalu atur menu apa saja yang tampil di bawah kepala navigasi untuk role tersebut.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedMappingRole}
-              onChange={(event) => setSelectedMappingRole(event.target.value as RoleMeta['role'])}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold outline-none"
-            >
-              {nonSuperadminRoles.map((role) => (
-                <option key={role.role} value={role.role}>{role.roleTitle || role.role}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => void saveRoleModuleMappings()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition cursor-pointer"
-            >
-              <Save className="h-4 w-4 text-emerald-400" />
-              <span>Simpan Mapping</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-5">
-        {navigationHeads
-          .slice()
-          .sort((left, right) => left.order - right.order)
-          .map((head) => {
-            const modulesUnderHead = adminModules
-              .filter((module) => module.navigationHeadKey === head.key && module.showInNavbar)
-              .sort((left, right) => left.order - right.order);
-
-            return (
-              <div key={head.key} className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{head.key}</p>
-                    <h4 className="mt-0.5 text-base font-black text-slate-950">{head.label}</h4>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                    {modulesUnderHead.length} modul
-                  </span>
-                </div>
-
-                <div className="mt-4 space-y-2.5">
-                  {modulesUnderHead.map((module) => {
-                    const existing = selectedRoleMappingDraft.find((mapping) => mapping.moduleKey === module.key);
-                    const checked = existing?.isVisible ?? false;
-
-                    return (
-                      <label key={module.key} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 hover:bg-slate-50 cursor-pointer">
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{module.label}</p>
-                          <p className="mt-0.5 text-[11px] text-slate-500">{module.description}</p>
-                        </div>
+                    <div className="flex items-center justify-between gap-2 pb-1">
+                      <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={checked}
+                          checked={head.isActive}
                           onChange={(event) => {
-                            const nextVisible = event.target.checked;
-                            setMappingDrafts((state) => {
-                              const current = state[selectedMappingRole] ?? [];
-                              const withoutCurrent = current.filter((mapping) => mapping.moduleKey !== module.key);
-                              return {
-                                ...state,
-                                [selectedMappingRole]: [
-                                  ...withoutCurrent,
-                                  {
-                                    role: selectedMappingRole,
-                                    moduleKey: module.key,
-                                    isVisible: nextVisible,
-                                    orderOverride: existing?.orderOverride ?? module.order,
-                                  },
-                                ],
-                              };
-                            });
+                            setHeadDrafts((state) => ({
+                              ...state,
+                              [headKey]: { ...head, isActive: event.target.checked },
+                            }));
                           }}
                           className="h-4 w-4 rounded border-slate-300 text-emerald-600 cursor-pointer"
                         />
+                        <span>Aktif</span>
                       </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeadDrafts((state) => {
+                            const next = { ...state };
+                            delete next[headKey];
+                            return next;
+                          });
+                        }}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderModuleToRole = () => {
+    // Both admin_modules and admin_module_roles share the same intuitive interface
+    return renderModuleMaster();
+  };
 
   const renderMappings = () => (
     <div className="space-y-6">
